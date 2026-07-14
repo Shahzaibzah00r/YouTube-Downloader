@@ -140,8 +140,8 @@ Quality options: `best` · `1080` · `720` · `480` · `audio`
 | Tag `v*` | Build Intel + Apple Silicon DMGs → GitHub Release |
 
 ```bash
-git tag v1.7.4
-git push origin v1.7.4
+git tag v1.7.5
+git push origin v1.7.5
 ```
 
 See [docs/CI_CD.md](./docs/CI_CD.md).

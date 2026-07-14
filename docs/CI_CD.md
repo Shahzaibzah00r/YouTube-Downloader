@@ -31,8 +31,8 @@ Builds are **ad-hoc signed** and clear **quarantine** (`xattr -cr`). Prefer the 
 git checkout main
 git pull
 # bump VERSION file first
-git tag v1.7.4
-git push origin v1.7.4
+git tag v1.7.5
+git push origin v1.7.5
 ```
 
 Or: **Actions → Release → Run workflow**.

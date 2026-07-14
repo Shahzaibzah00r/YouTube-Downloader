@@ -21,7 +21,7 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.7.4"
+  VERSION="1.7.5"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
