@@ -150,6 +150,12 @@ case "$ARCH_LABEL" in
   *)            ARCH_FRIENDLY="$ARCH_LABEL" ;;
 esac
 
+# Ad-hoc sign BEFORE packaging (Gatekeeper still warns on download without notarization,
+# but signing + Install script below avoids the “blocked” loop for most users).
+xattr -cr "$APP" 2>/dev/null || true
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
+
 DMG_GENERIC="$DIST/YouTube-Downloader-macOS.dmg"
 DMG_ARCH="$DIST/YTDownloader-v${VERSION}-${ARCH_LABEL}-macOS.dmg"
 STAGE="$DIST/dmg-stage"
@@ -157,19 +163,65 @@ rm -rf "$STAGE" "$DMG_GENERIC" "$DMG_ARCH"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
+
+# First-run helper: clears quarantine then opens (macOS re-quarantines GitHub downloads)
+cat > "$STAGE/Install & Open.command" <<'INSTALL'
+#!/bin/bash
+set -e
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC="$DIR/YTDownloader.app"
+DEST="/Applications/YTDownloader.app"
+
+if [[ ! -d "$SRC" ]]; then
+  osascript -e 'display dialog "YTDownloader.app not found next to this installer." buttons {"OK"} default button 1 with title "YTDownloader"'
+  exit 1
+fi
+
+osascript -e 'display notification "Installing YTDownloader…" with title "YTDownloader"' || true
+
+rm -rf "$DEST"
+# ditto preserves resources; fall back to cp
+if command -v ditto >/dev/null 2>&1; then
+  ditto "$SRC" "$DEST"
+else
+  cp -R "$SRC" "$DEST"
+fi
+
+# Remove the “downloaded from internet” flag macOS adds — this is what blocks open
+xattr -cr "$DEST" 2>/dev/null || true
+codesign --force --deep --sign - "$DEST" 2>/dev/null || true
+xattr -cr "$DEST" 2>/dev/null || true
+
+open "$DEST"
+osascript -e 'display notification "YTDownloader is ready" with title "YTDownloader"' || true
+INSTALL
+chmod +x "$STAGE/Install & Open.command"
+
 cat > "$STAGE/README.txt" <<EOF
 YTDownloader for macOS — $ARCH_FRIENDLY
+
+IMPORTANT (macOS security / Gatekeeper)
+  Double-clicking the .app after a GitHub download often shows:
+  “Apple could not verify YTDownloader.app…”
+  That is normal without a paid Apple Developer certificate.
+
+  Easiest fix — use the installer in this DMG:
+    1. Double-click “Install & Open.command”
+    2. If Terminal asks, click Open
+    3. The app installs to Applications and opens (quarantine cleared)
+
+  Or after dragging the app to Applications, run in Terminal:
+    xattr -cr /Applications/YTDownloader.app
+    open /Applications/YTDownloader.app
+
+  Or: click Done → System Settings → Privacy & Security → Open Anyway
 
 Which DMG should I download?
   • YTDownloader-…-Intel-macOS.dmg         → Intel MacBook / iMac
   • YTDownloader-…-AppleSilicon-macOS.dmg → M1 / M2 / M3 / M4 Macs
 
 This build: $ARCH_FRIENDLY ($HOST_ARCH)
-
-1. Drag YTDownloader into Applications
-2. Open it — a native Mac app window appears (not the browser)
-3. Paste a YouTube URL and click Download
-4. If tools are missing, click Fix tools (needs Homebrew)
 
 https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
@@ -185,11 +237,6 @@ cp "$DMG_GENERIC" "$RELEASES/YouTube-Downloader-macOS.dmg" 2>/dev/null || true
 echo "$VERSION" > "$RELEASES/VERSION.txt"
 echo "$ARCH_LABEL" > "$RELEASES/ARCH.txt"
 
-# Ad-hoc sign + strip quarantine before shipping (no Apple Developer ID required)
-xattr -cr "$APP" 2>/dev/null || true
-codesign --force --deep --sign - "$APP" 2>/dev/null || true
-xattr -cr "$APP" 2>/dev/null || true
-# Also clear quarantine on the DMG container after create (helps some macOS versions)
 xattr -cr "$DMG_ARCH" 2>/dev/null || true
 xattr -cr "$DMG_GENERIC" 2>/dev/null || true
 
@@ -198,5 +245,5 @@ echo "✅ App:   $APP"
 echo "✅ DMG:   $DMG_ARCH"
 echo "✅ Also:  $DMG_GENERIC"
 echo "   Arch:  $ARCH_FRIENDLY"
-echo "   Sign:  ad-hoc (unsigned developer — quarantine cleared in launcher)"
+echo "   Tip:   Use “Install & Open.command” inside the DMG (clears Gatekeeper quarantine)"
 ls -lh "$APP" "$DMG_ARCH" "$DMG_GENERIC"

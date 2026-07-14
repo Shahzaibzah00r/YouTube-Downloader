@@ -42,21 +42,24 @@ Apple menu → **About This Mac** if you’re unsure.
 3. Drag **YTDownloader** into **Applications** and open it  
 4. If `yt-dlp` / `ffmpeg` are missing, click **Fix tools** ([Homebrew](https://brew.sh) required)
 
-### macOS “blocked” / Gatekeeper (no paid Apple account)
+### macOS “Apple could not verify…” / Gatekeeper
 
-We don’t use a paid Apple Developer ID, so macOS may warn on first open. YTDownloader **automatically**:
+macOS shows this for **any** app downloaded from the internet that is not **notarized** by Apple.  
+We don’t use a paid Apple Developer account, so a double-click of the `.app` from a GitHub DMG often shows that dialog **before** our code can run.
 
-- clears the quarantine flag (`xattr -cr`) on launch and after in-app updates  
-- ad-hoc code-signs the app (no certificate purchase)
+**Easiest install (recommended):** open the DMG → double-click **`Install & Open.command`**  
+(That copies to Applications, clears quarantine, and opens the app.)
 
-That removes the usual Settings → Privacy loop for most users. If a download is still blocked once:
+**Already dragged to Applications and blocked?**
 
 ```bash
 xattr -cr /Applications/YTDownloader.app
 open /Applications/YTDownloader.app
 ```
 
-Or right-click the app → **Open** → **Open**. Full Apple notarization is the only way to silence Gatekeeper completely — that requires a paid developer account.
+Or: click **Done** → **System Settings → Privacy & Security** → scroll down → **Open Anyway**.
+
+Full silent open (no dialog) requires paid Apple notarization — not available for this free project.
 
 ### App updates
 

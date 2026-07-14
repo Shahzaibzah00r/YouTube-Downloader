@@ -103,13 +103,14 @@ jobs:
 
             Not sure? Apple menu → **About This Mac**
 
-            ### Install
-            1. Download the matching DMG
-            2. Drag **YTDownloader** into **Applications**
-            3. Open it (native Mac window)
-            4. If macOS blocks it: the app clears quarantine on launch, or run `xattr -cr /Applications/YTDownloader.app`
+            ### Install (important on modern macOS)
+            1. Download the matching DMG and open it
+            2. Prefer **Install & Open.command** (clears Gatekeeper quarantine)
+            3. Or drag to Applications, then if blocked run:
+               `xattr -cr /Applications/YTDownloader.app && open /Applications/YTDownloader.app`
+            4. Or: Done → System Settings → Privacy & Security → **Open Anyway**
             5. Paste a URL → Get preview → Download
-            6. Use **Check update** in the app for newer releases
+            6. Use **Check update** for newer releases
             7. **Fix tools** if yt-dlp / ffmpeg are missing ([Homebrew](https://brew.sh))
           files: |
             dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg
