@@ -4,106 +4,242 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>YTDownloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Source+Serif+4:opsz,wght@8..60,600;8..60,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <div class="app">
-    <header class="header">
-      <div>
-        <h1>YTDownloader</h1>
-        <p class="sub">YouTube, playlists, and any direct file URL</p>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>YTDownloader</h1>
+          <p class="tagline">Multi playlist · video &amp; audio · local</p>
+        </div>
       </div>
-      <div class="header-actions">
-        <button type="button" class="btn ghost" id="themeBtn" title="Toggle theme">Light</button>
-        <div class="pill" id="archPill">macOS</div>
+      <div class="topbar-right">
+        <div class="chip-group" title="Zoom — ⌘− ⌘+ ⌘0">
+          <button type="button" class="status-chip icon-chip zoom-label" id="zoomReset" aria-label="Reset zoom" title="Reset zoom (⌘0) · Zoom with ⌘− / ⌘+">
+            <span id="zoomPct">100%</span>
+          </button>
+        </div>
+        <button type="button" class="status-chip theme-chip" id="themeBtn" title="Toggle theme">
+          <span class="theme-ico" id="themeIcon" aria-hidden="true"></span>
+          <span id="themeLabel">Light</span>
+        </button>
+        <div class="status-chip" id="archPill">macOS</div>
       </div>
     </header>
 
-    <section class="card">
-      <div class="mode-row" role="tablist">
-        <button type="button" class="mode-btn active" data-mode="single" id="modeSingle">Single URL</button>
-        <button type="button" class="mode-btn" data-mode="batch" id="modeBatch">Batch URLs</button>
-      </div>
-
-      <div id="singleBox">
-        <label for="url">URL (YouTube or any file link)</label>
-        <div class="row">
-          <input id="url" type="url" placeholder="https://…" autocomplete="off" spellcheck="false" />
-          <button type="button" class="btn ghost" id="pasteBtn">Paste</button>
-          <button type="button" class="btn ghost" id="previewBtn">Preview</button>
-        </div>
-      </div>
-
-      <div id="batchBox" class="hidden">
-        <label for="batch">URLs (one per line)</label>
-        <textarea id="batch" rows="6" placeholder="https://youtube.com/watch?v=…&#10;https://example.com/file.zip&#10;…"></textarea>
-        <p class="hint" id="batchCount">0 URLs</p>
-      </div>
-
-      <div class="preview hidden" id="previewCard">
-        <img id="previewThumb" alt="" />
-        <div class="preview-meta">
-          <strong id="previewTitle">—</strong>
-          <span id="previewSub" class="muted">—</span>
-        </div>
-      </div>
-
-      <div class="media-block">
-        <label>Download as (YouTube)</label>
-        <div class="check-row">
-          <label class="check-item" for="optVideo">
-            <input type="checkbox" id="optVideo" checked />
-            <span>Video</span>
-          </label>
-          <label class="check-item" for="optAudio">
-            <input type="checkbox" id="optAudio" />
-            <span>Audio (MP3)</span>
-          </label>
-        </div>
-        <p class="hint" id="mediaHint">Video selected — check both to save video + separate MP3</p>
-      </div>
-
-      <div class="grid2">
-        <div id="qualityBox">
-          <label for="quality">Video quality</label>
-          <div class="select-wrap">
-            <select id="quality">
-              <option value="best">Best available</option>
-              <option value="1080">1080p MP4</option>
-              <option value="720">720p MP4</option>
-              <option value="480">480p MP4</option>
-            </select>
+    <main class="workspace">
+      <section class="panel control-panel">
+        <div class="panel-head">
+          <div class="segment" role="tablist">
+            <button type="button" class="segment-btn active" id="modeSingle">Playlist / URL</button>
+            <button type="button" class="segment-btn" id="modeBatch">Batch URLs</button>
           </div>
         </div>
-        <div>
-          <label for="outdir">Save folder</label>
-          <div class="row">
-            <input id="outdir" type="text" />
-            <button type="button" class="btn ghost" id="folderBtn">Downloads</button>
+
+        <div class="panel-body">
+          <div id="singleBox" class="field">
+            <label for="url">Playlist or video URL</label>
+            <div class="field-row">
+              <input
+                id="url"
+                type="url"
+                placeholder="https://www.youtube.com/playlist?list=…"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" class="btn secondary" id="pasteBtn">Paste</button>
+            </div>
+          </div>
+
+          <div id="batchBox" class="field hidden">
+            <label for="batch">URLs · one per line</label>
+            <textarea id="batch" rows="5" placeholder="https://youtube.com/playlist?list=…&#10;https://youtube.com/watch?v=…"></textarea>
+            <p class="field-note" id="batchCount">0 URLs</p>
+          </div>
+
+          <div class="toolbar">
+            <div class="tool">
+              <span class="tool-label">Format</span>
+              <div class="toggle-group">
+                <label class="toggle" for="optVideo">
+                  <input type="checkbox" id="optVideo" checked />
+                  <span>Video</span>
+                </label>
+                <label class="toggle" for="optAudio">
+                  <input type="checkbox" id="optAudio" />
+                  <span>Audio</span>
+                </label>
+                <label class="toggle" for="optSubs">
+                  <input type="checkbox" id="optSubs" />
+                  <span>Subs</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="tool" id="qualityBox">
+              <label class="tool-label" for="quality">Quality</label>
+              <div class="select-wrap">
+                <select id="quality">
+                  <option value="best">Best available</option>
+                  <option value="1080">1080p MP4</option>
+                  <option value="720">720p MP4</option>
+                  <option value="480">480p MP4</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="tool">
+              <label class="tool-label" for="filenameTpl">Filename</label>
+              <div class="select-wrap">
+                <select id="filenameTpl">
+                  <option value="title">Title</option>
+                  <option value="uploader_title">Uploader - Title</option>
+                  <option value="date_title">Date - Title</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="tool tool-narrow">
+              <label class="tool-label" for="concurrency">At once</label>
+              <input id="concurrency" type="number" min="1" max="6" value="1" />
+              <p class="field-note" id="concurrencyHint">1 single · 2 playlist</p>
+            </div>
+
+            <div class="tool tool-grow">
+              <label class="tool-label" for="outdir">Save to</label>
+              <div class="field-row">
+                <input id="outdir" type="text" readonly title="Click Browse to choose a folder" />
+                <button type="button" class="btn secondary" id="browseBtn">Browse</button>
+                <button type="button" class="btn ghost" id="folderBtn">~/Downloads</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cta-row">
+            <button type="button" class="btn primary" id="previewBtn">Get preview</button>
+            <button type="button" class="btn secondary" id="downloadBtn" disabled>Download selected</button>
+            <button type="button" class="btn secondary" id="pauseBtn" disabled>Pause</button>
+            <button type="button" class="btn danger" id="cancelBtn" disabled>Cancel</button>
+            <div class="cta-spacer"></div>
+            <button type="button" class="btn ghost" id="openBtn">Open folder</button>
+            <button type="button" class="btn ghost" id="checkUpdateBtn">Check update</button>
+            <button type="button" class="btn ghost" id="updateBtn">Update yt-dlp</button>
+            <button type="button" class="btn ghost" id="fixBtn">Fix tools</button>
+          </div>
+
+          <p class="status-line" id="status">Starting…</p>
+          <p class="field-note" id="mediaHint">Paste links → Get preview → download the rows you need</p>
+
+          <div class="progress-panel hidden" id="progressPanel">
+            <div class="meter">
+              <div class="meter-scale">
+                <span class="meter-now" id="overallPct">0%</span>
+                <span class="meter-speed" id="overallSpeed">—</span>
+              </div>
+              <div class="meter-track">
+                <div class="meter-fill" id="bar"></div>
+              </div>
+            </div>
+            <div class="item-progress-list" id="itemProgress"></div>
+            <div class="progress-footer">
+              <p class="field-note" id="queueHint"></p>
+              <button type="button" class="btn secondary tiny hidden" id="retryFailedBtn">Retry failed</button>
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="actions">
-        <button type="button" class="btn primary" id="downloadBtn">Start downloading</button>
-        <button type="button" class="btn danger" id="cancelBtn" disabled>Cancel</button>
-        <button type="button" class="btn ghost" id="openBtn">Open folder</button>
-        <button type="button" class="btn ghost" id="fixBtn">Fix tools</button>
-      </div>
+      <section class="panel results-panel hidden" id="previewPanel">
+        <div class="results-head">
+          <div class="preview-block" id="previewCard">
+            <img id="previewThumb" alt="" class="hidden" />
+            <div class="preview-copy">
+              <strong id="previewTitle">—</strong>
+              <span id="previewSub" class="muted">—</span>
+              <span id="previewSize" class="size-chip hidden">—</span>
+            </div>
+          </div>
+          <div class="results-actions" id="playlistTools">
+            <input
+              type="search"
+              id="playlistFilter"
+              class="filter-input"
+              placeholder="Filter videos…"
+              autocomplete="off"
+            />
+            <button type="button" class="btn ghost tiny" id="selectAllBtn">Select all</button>
+            <button type="button" class="btn ghost tiny" id="selectNoneBtn">Select none</button>
+            <span class="field-note" id="selectedCount">0 selected</span>
+            <span class="field-note" id="estSize">—</span>
+          </div>
+        </div>
 
-      <p class="status" id="status">Starting…</p>
-      <div class="progress"><div class="bar" id="bar"></div></div>
-      <p class="hint" id="queueHint"></p>
-    </section>
+        <div class="table-wrap">
+          <table class="video-table">
+            <thead>
+              <tr>
+                <th class="col-check"></th>
+                <th class="col-num">#</th>
+                <th class="col-thumb">Thumb</th>
+                <th class="col-title">Title</th>
+                <th class="col-meta">Info</th>
+                <th class="col-dl">Action</th>
+              </tr>
+            </thead>
+            <tbody id="playlistList"></tbody>
+          </table>
+        </div>
+        <p class="table-foot" id="playlistLabel">Select videos, then Download selected — or use Download on a row</p>
+      </section>
 
-    <section class="card log-card">
-      <div class="log-head">
-        <span>Activity</span>
-        <button type="button" class="btn tiny" id="clearBtn">Clear</button>
-      </div>
-      <pre id="log" class="log"></pre>
-    </section>
+      <section class="panel history-panel">
+        <div class="log-head">
+          <span class="panel-title">Recent downloads</span>
+          <div class="log-tools">
+            <button type="button" class="btn ghost tiny" id="refreshHistoryBtn">Refresh</button>
+          </div>
+        </div>
+        <div class="history-list" id="historyList" aria-live="polite"></div>
+      </section>
+
+      <section class="panel log-panel">
+        <div class="log-head">
+          <span class="panel-title">Activity</span>
+          <div class="log-tools">
+            <label class="check-inline" for="autoScroll">
+              <input type="checkbox" id="autoScroll" checked />
+              <span>Auto-scroll</span>
+            </label>
+            <button type="button" class="btn ghost tiny" id="clearBtn">Clear</button>
+          </div>
+        </div>
+        <pre id="log" class="log"></pre>
+      </section>
+    </main>
   </div>
+  <div id="dropOverlay" class="drop-overlay hidden" aria-hidden="true">
+    <div class="drop-card">Drop URLs to paste</div>
+  </div>
+
+  <div id="updateModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+    <div class="modal-card">
+      <h2 id="updateModalTitle">Update available</h2>
+      <p class="modal-body" id="updateModalBody">A newer YTDownloader is ready.</p>
+      <p class="field-note" id="updateModalMeta"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn primary" id="updateInstallBtn">Install update</button>
+        <button type="button" class="btn secondary" id="updateLaterBtn">Later</button>
+        <button type="button" class="btn ghost" id="updateOpenReleaseBtn">Release notes</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

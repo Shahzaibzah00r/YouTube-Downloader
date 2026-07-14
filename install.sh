@@ -37,9 +37,12 @@ fi
 echo "==> Installing to $DEST"
 rm -rf "$DEST"
 cp -R "$ROOT/dist/$APP_NAME.app" "$DEST"
+# Remove quarantine + ad-hoc sign so macOS does not block the app
+xattr -cr "$DEST" 2>/dev/null || true
+codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 
 echo
 echo "✅ Installed: $DEST"
+echo "   Quarantine cleared · ad-hoc signed (no paid Apple account needed)"
 open "$DEST"
-echo "A dark web UI will open in your browser."

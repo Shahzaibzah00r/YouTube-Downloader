@@ -106,9 +106,11 @@ jobs:
             ### Install
             1. Download the matching DMG
             2. Drag **YTDownloader** into **Applications**
-            3. Open it — dark web UI opens in your browser
-            4. Paste a YouTube URL → Download
-            5. Click **Fix tools** if needed ([Homebrew](https://brew.sh))
+            3. Open it (native Mac window)
+            4. If macOS blocks it: the app clears quarantine on launch, or run `xattr -cr /Applications/YTDownloader.app`
+            5. Paste a URL → Get preview → Download
+            6. Use **Check update** in the app for newer releases
+            7. **Fix tools** if yt-dlp / ffmpeg are missing ([Homebrew](https://brew.sh))
           files: |
             dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg
             dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg

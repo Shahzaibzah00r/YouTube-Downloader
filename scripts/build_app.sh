@@ -48,13 +48,23 @@ fi
 cp "$ROOT/yt_downloader.py" "$APP/Contents/Resources/yt_downloader.py"
 cp "$ROOT/youtube_downloader_gui.py" "$APP/Contents/Resources/youtube_downloader_gui.py"
 cp "$ROOT/webui/index.html" "$ROOT/webui/styles.css" "$ROOT/webui/app.js" "$APP/Contents/Resources/webui/"
+# Version file for in-app update checks
+printf '%s\n' "$VERSION" > "$APP/Contents/Resources/VERSION"
+printf '%s\n' "$VERSION" > "$ROOT/VERSION"
 
 cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
+APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
 RES="$HERE/Resources"
 cd "$RES"
+
+# Clear Gatekeeper quarantine on every launch (unsigned OSS — no paid Apple cert)
+# This is what removes the “blocked / open in Settings” loop after install or update.
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
 PYTHON=""
 for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
@@ -175,11 +185,18 @@ cp "$DMG_GENERIC" "$RELEASES/YouTube-Downloader-macOS.dmg" 2>/dev/null || true
 echo "$VERSION" > "$RELEASES/VERSION.txt"
 echo "$ARCH_LABEL" > "$RELEASES/ARCH.txt"
 
+# Ad-hoc sign + strip quarantine before shipping (no Apple Developer ID required)
 xattr -cr "$APP" 2>/dev/null || true
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
+# Also clear quarantine on the DMG container after create (helps some macOS versions)
+xattr -cr "$DMG_ARCH" 2>/dev/null || true
+xattr -cr "$DMG_GENERIC" 2>/dev/null || true
 
 echo
 echo "✅ App:   $APP"
 echo "✅ DMG:   $DMG_ARCH"
 echo "✅ Also:  $DMG_GENERIC"
 echo "   Arch:  $ARCH_FRIENDLY"
+echo "   Sign:  ad-hoc (unsigned developer — quarantine cleared in launcher)"
 ls -lh "$APP" "$DMG_ARCH" "$DMG_GENERIC"

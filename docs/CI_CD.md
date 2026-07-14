@@ -10,7 +10,8 @@ This project uses **GitHub Actions** (best fit for a free open-source macOS DMG)
 | Self-hosted Mac runner | Only needed for Apple notarization with your own hardware/certs |
 | Third-party CI (Circle, etc.) | Extra account for little gain here |
 
-We do **not** notarize with Apple Developer ID in CI (needs paid cert + secrets). Users install with Right-click → Open once — normal for indie OSS.
+We do **not** notarize with Apple Developer ID in CI (needs paid cert + secrets).  
+Builds are **ad-hoc signed** and the app / installer clear **quarantine** (`xattr -cr`) so most Macs open without a Settings trip. Full notarization is the only complete Gatekeeper silence — not used here.
 
 ## Pipelines
 
