@@ -59,7 +59,7 @@ jobs:
           ./scripts/build_app.sh
           test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg"
           cp "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg" \
-             "dist/keep-AppleSilicon.dmg"
+             "$RUNNER_TEMP/YTDownloader-AppleSilicon.dmg"
 
       - name: Build Intel–named DMG
         env:
@@ -68,10 +68,9 @@ jobs:
         run: |
           ./scripts/build_app.sh
           test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg"
-          # Restore Apple Silicon file (build_app clears dist/)
-          cp dist/keep-AppleSilicon.dmg \
+          # Restore Apple Silicon DMG (build_app recreates dist/)
+          cp "$RUNNER_TEMP/YTDownloader-AppleSilicon.dmg" \
              "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg"
-          rm -f dist/keep-AppleSilicon.dmg
           ls -lh dist/*.dmg
 
       - name: Upload artifacts
