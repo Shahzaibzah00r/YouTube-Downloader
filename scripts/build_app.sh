@@ -48,7 +48,7 @@ fi
 cp "$ROOT/yt_downloader.py" "$APP/Contents/Resources/yt_downloader.py"
 cp "$ROOT/youtube_downloader_gui.py" "$APP/Contents/Resources/youtube_downloader_gui.py"
 cp "$ROOT/webui/index.html" "$ROOT/webui/styles.css" "$ROOT/webui/app.js" "$APP/Contents/Resources/webui/"
-# Version file for in-app update checks
+# Version file for in-app update 
 printf '%s\n' "$VERSION" > "$APP/Contents/Resources/VERSION"
 printf '%s\n' "$VERSION" > "$ROOT/VERSION"
 
