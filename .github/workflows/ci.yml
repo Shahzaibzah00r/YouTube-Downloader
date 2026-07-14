@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  scripts:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check shell scripts
+        run: |
+          bash -n setup.sh
+          bash -n download.sh
+          bash -n "Open YouTube Downloader.command"
+          bash -n scripts/build_macos.sh
+
+      - name: Syntax-check Python GUI
+        run: python3 -m py_compile youtube_downloader_gui.py
+
+      - name: Required files present
+        run: |
+          test -f README.md
+          test -f LICENSE
+          test -f setup.sh
+          test -f download.sh
+          test -f youtube_downloader_gui.py
+          test -f "Youtube Downloader.xcodeproj/project.pbxproj"
+          test -f "Youtube Downloader/downloadViewModel.swift"

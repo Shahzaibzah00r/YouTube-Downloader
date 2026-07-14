@@ -111,9 +111,55 @@ class DownloadViewModel: ObservableObject {
         return fullPath
     }
     
+    /// Prefer architecture-aware Homebrew paths (Intel + Apple Silicon).
+    private func resolveSystemBinary(named name: String) -> String? {
+        let preferred: [String]
+        if isAppleSilicon {
+            preferred = ["/opt/homebrew/bin/\(name)", "/usr/local/bin/\(name)", "/usr/bin/\(name)"]
+        } else {
+            preferred = ["/usr/local/bin/\(name)", "/opt/homebrew/bin/\(name)", "/usr/bin/\(name)"]
+        }
+        return preferred.first { FileManager.default.isExecutableFile(atPath: $0) }
+    }
+    
+    private var isAppleSilicon: Bool {
+        var info = utsname()
+        uname(&info)
+        let machine = withUnsafePointer(to: &info.machine) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1) {
+                String(cString: $0)
+            }
+        }
+        return machine == "arm64"
+    }
+    
+    /// Native static ffmpeg/ffprobe URL for the current CPU.
+    /// Intel → evermeet.cx (x86_64). Apple Silicon → martin-riedl (arm64).
+    private func bundledToolZipURL(for tool: String) -> URL {
+        if isAppleSilicon {
+            return URL(string: "https://ffmpeg.martin-riedl.de/redirect/latest/macos/arm64/release/\(tool).zip")!
+        }
+        if tool == "ffmpeg" {
+            return URL(string: "https://evermeet.cx/ffmpeg/getrelease/zip")!
+        }
+        return URL(string: "https://evermeet.cx/ffmpeg/getrelease/\(tool)/zip")!
+    }
+    
     /// Checks for dependencies, and if they don't exist, downloads and sets them up.
     private func locateOrDownloadDependencies() async {
         do {
+            // Prefer Homebrew/system installs on both Intel and Apple Silicon.
+            if let systemYtDlp = resolveSystemBinary(named: "yt-dlp"),
+               let systemFfmpeg = resolveSystemBinary(named: "ffmpeg"),
+               let systemFfprobe = resolveSystemBinary(named: "ffprobe") {
+                addLog("✅ Using system tools: yt-dlp, ffmpeg, ffprobe.")
+                self.ytDlpPath = systemYtDlp
+                self.ffmpegPath = systemFfmpeg
+                self.ffprobePath = systemFfprobe
+                self.dependenciesReady = true
+                return
+            }
+            
             let dir = try getAppSupportDirectory()
             let expectedYtDlpPath = dir.appendingPathComponent("yt-dlp").path
             let expectedFfmpegPath = dir.appendingPathComponent("ffmpeg").path
@@ -132,12 +178,12 @@ class DownloadViewModel: ObservableObject {
                 return
             }
             
-            
             // --- Download & Setup Logic ---
             isSettingUp = true
-            addLog("Initial setup: preparing required tools...")
+            let cpuLabel = isAppleSilicon ? "Apple Silicon (arm64)" : "Intel (x86_64)"
+            addLog("Initial setup (\(cpuLabel)): preparing required tools...")
             
-            // 1. Download yt-dlp
+            // 1. Download yt-dlp (universal macOS binary)
             if !ytDlpExists {
                 setupStatusMessage = "Downloading yt-dlp..."
                 addLog(setupStatusMessage)
@@ -147,56 +193,74 @@ class DownloadViewModel: ObservableObject {
                 addLog("yt-dlp downloaded successfully.")
             }
             
-            // 2. Download ffmpeg
+            // 2. Download native ffmpeg for this CPU
             if !ffmpegExists {
                 setupStatusMessage = "Downloading ffmpeg..."
                 addLog(setupStatusMessage)
                 
-                let ffmpegZipURL = URL(string: "https://evermeet.cx/ffmpeg/getrelease/zip")!
-                let zipPath = dir.appendingPathComponent("ffmpeg") // Use a unique name for the zip
+                let ffmpegZipURL = bundledToolZipURL(for: "ffmpeg")
+                let zipPath = dir.appendingPathComponent("ffmpeg.zip")
                 try await downloadFile(from: ffmpegZipURL, to: zipPath)
                 
                 setupStatusMessage = "Unpacking ffmpeg..."
                 addLog(setupStatusMessage)
                 try unzip(file: zipPath, to: dir)
+                try? FileManager.default.removeItem(at: zipPath)
                 
-                // The unzipped file is named 'ffmpeg', so it will be at the expected path.
+                // martin-riedl zips may nest the binary; flatten if needed
+                try normalizeBinary(named: "ffmpeg", expectedAt: expectedFfmpegPath, in: dir)
                 try makeExecutable(at: expectedFfmpegPath)
-//                try FileManager.default.removeItem(at: zipPath) // Clean up the zip file
                 addLog("ffmpeg setup successfully.")
             }
             
-            // 3. Download ffprobe
-            if !ffprobeExists { // NEW: Download ffprobe if it doesn't exist
+            // 3. Download native ffprobe for this CPU
+            if !ffprobeExists {
                 setupStatusMessage = "Downloading ffprobe..."
                 addLog(setupStatusMessage)
                 
-                let ffprobeZipURL = URL(string: "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip")! // The URL you provided
-                let zipPath = dir.appendingPathComponent("ffprobe") // Use a unique name for the zip
+                let ffprobeZipURL = bundledToolZipURL(for: "ffprobe")
+                let zipPath = dir.appendingPathComponent("ffprobe.zip")
                 try await downloadFile(from: ffprobeZipURL, to: zipPath)
                 
                 setupStatusMessage = "Unpacking ffprobe..."
                 addLog(setupStatusMessage)
                 try unzip(file: zipPath, to: dir)
+                try? FileManager.default.removeItem(at: zipPath)
                 
+                try normalizeBinary(named: "ffprobe", expectedAt: expectedFfprobePath, in: dir)
                 try makeExecutable(at: expectedFfprobePath)
-//                try? FileManager.default.removeItem(at: zipPath) // Clean up the zip file
                 addLog("ffprobe setup successfully.")
             }
             
             self.ytDlpPath = expectedYtDlpPath
             self.ffmpegPath = expectedFfmpegPath
-            self.ffprobePath = expectedFfprobePath // NEW: Set the ffprobe path
+            self.ffprobePath = expectedFfprobePath
             self.dependenciesReady = true
             addLog("✅ All dependencies are ready.")
             
         } catch {
-            showError("Failed during initial setup: \(error.localizedDescription). Please check your internet connection and restart the app.")
+            showError("Failed during initial setup: \(error.localizedDescription). Please check your internet connection and restart the app. Tip: brew install yt-dlp ffmpeg")
             self.dependenciesReady = false
         }
         
         isSettingUp = false
         setupStatusMessage = ""
+    }
+    
+    /// Ensures the binary sits at the expected path (handles nested zip layouts).
+    private func normalizeBinary(named name: String, expectedAt expectedPath: String, in dir: URL) throws {
+        if FileManager.default.fileExists(atPath: expectedPath) { return }
+        let enumerator = FileManager.default.enumerator(at: dir, includingPropertiesForKeys: nil)
+        while let fileURL = enumerator?.nextObject() as? URL {
+            if fileURL.lastPathComponent == name, fileURL.path != expectedPath {
+                if FileManager.default.fileExists(atPath: expectedPath) {
+                    try FileManager.default.removeItem(atPath: expectedPath)
+                }
+                try FileManager.default.moveItem(at: fileURL, to: URL(fileURLWithPath: expectedPath))
+                return
+            }
+        }
+        throw NSError(domain: "SetupError", code: 2, userInfo: [NSLocalizedDescriptionKey: "Could not find \(name) after unzip."])
     }
     
     /// Downloads a file from a URL to a local path.
