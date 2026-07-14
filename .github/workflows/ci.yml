@@ -24,24 +24,24 @@ jobs:
           bash -n download.sh
           bash -n install.sh
           bash -n "Open YTDownloader.command"
-          bash -n "Open YouTube Downloader.command"
           bash -n scripts/build_app.sh
-          bash -n scripts/build_macos.sh
+          bash -n scripts/install-release.sh
 
       - name: Syntax-check Python
-        run: |
-          python3 -m py_compile yt_downloader.py
-          python3 -m py_compile youtube_downloader_gui.py
+        run: python3 -m py_compile yt_downloader.py
 
       - name: Required project files
         run: |
           test -f README.md
           test -f LICENSE
+          test -f VERSION
           test -f yt_downloader.py
+          test -f assets/AppIcon.png
           test -f webui/index.html
           test -f webui/styles.css
           test -f webui/app.js
           test -f scripts/build_app.sh
+          test -f scripts/install-release.sh
 
       - name: Smoke-build .app + DMG
         run: |

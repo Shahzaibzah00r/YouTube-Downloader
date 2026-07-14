@@ -27,7 +27,17 @@ Runs in a **native Mac window** (not a browser tab) with dark & light themes.
 
 ---
 
-## Free download (DMG)
+## Install (Intel & Apple Silicon)
+
+**Recommended — one command, no Gatekeeper quarantine:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh | bash
+```
+
+Detects Intel vs Apple Silicon, downloads the matching DMG with **curl** (not the browser), installs to `/Applications`, clears quarantine, and opens. No “Apple could not verify…” dialog.
+
+### Or download a DMG
 
 1. Open the latest **[Release](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest)**
 2. Pick the DMG for your Mac:
@@ -37,35 +47,22 @@ Runs in a **native Mac window** (not a browser tab) with dark & light themes.
 | **Intel** | `YTDownloader-…-Intel-macOS.dmg` |
 | **Apple Silicon** (M1 / M2 / M3 / M4) | `YTDownloader-…-AppleSilicon-macOS.dmg` |
 
-Apple menu → **About This Mac** if you’re unsure.
-
-3. Drag **YTDownloader** into **Applications** and open it  
+3. Prefer **`Install & Open.command`** inside the DMG (clears quarantine). Dragging the `.app` alone often triggers Gatekeeper.  
 4. If `yt-dlp` / `ffmpeg` are missing, click **Fix tools** ([Homebrew](https://brew.sh) required)
 
-### macOS “Apple could not verify…” / Gatekeeper
-
-macOS shows this for **any** app downloaded from the internet that is not **notarized** by Apple.  
-We don’t use a paid Apple Developer account, so a double-click of the `.app` from a GitHub DMG often shows that dialog **before** our code can run.
-
-**Easiest install (recommended):** open the DMG → double-click **`Install & Open.command`**  
-(That copies to Applications, clears quarantine, and opens the app.)
-
-**Already dragged to Applications and blocked?**
+### Already blocked by Gatekeeper?
 
 ```bash
 xattr -cr /Applications/YTDownloader.app
 open /Applications/YTDownloader.app
 ```
 
-Or: click **Done** → **System Settings → Privacy & Security** → scroll down → **Open Anyway**.
-
-Full silent open (no dialog) requires paid Apple notarization — not available for this free project.
+Or: **System Settings → Privacy & Security → Open Anyway**.
 
 ### App updates
 
 - On open, YTDownloader checks GitHub Releases once per day  
-- **Check update** asks to install when a newer version exists  
-- **Install update** downloads the right DMG, replaces the app, clears quarantine, and relaunches  
+- **Check update** / **Install update** downloads the right arch DMG, replaces the app, clears quarantine, **closes the old window**, and opens the new version once
 
 ---
 
@@ -143,11 +140,11 @@ Quality options: `best` · `1080` · `720` · `480` · `audio`
 | Tag `v*` | Build Intel + Apple Silicon DMGs → GitHub Release |
 
 ```bash
-git tag v1.7.0
-git push origin v1.7.0
+git tag v1.7.4
+git push origin v1.7.4
 ```
 
-See [docs/CI_CD.md](./docs/CI_CD.md) and [PUBLISH.md](./PUBLISH.md).
+See [docs/CI_CD.md](./docs/CI_CD.md).
 
 ---
 

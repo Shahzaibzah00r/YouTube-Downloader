@@ -1,17 +1,16 @@
-# CI/CD
+# CI / CD
 
-This project uses **GitHub Actions** (best fit for a free open-source macOS DMG):
+This project uses **GitHub Actions** for free open-source macOS DMGs.
 
 ## Why GitHub Actions
 
 | Option | Verdict |
 |--------|---------|
-| **GitHub Actions (chosen)** | Free for public repos, native `macos-latest` runners, built-in Releases upload |
+| **GitHub Actions (chosen)** | Free for public repos, native `macos-latest` / `macos-13` runners, Releases upload |
 | Self-hosted Mac runner | Only needed for Apple notarization with your own hardware/certs |
-| Third-party CI (Circle, etc.) | Extra account for little gain here |
+| Third-party CI | Extra account for little gain here |
 
-We do **not** notarize with Apple Developer ID in CI (needs paid cert + secrets).  
-Builds are **ad-hoc signed** and the app / installer clear **quarantine** (`xattr -cr`) so most Macs open without a Settings trip. Full notarization is the only complete Gatekeeper silence — not used here.
+Builds are **ad-hoc signed** and clear **quarantine** (`xattr -cr`). Prefer the curl installer (`scripts/install-release.sh`) — curl downloads are not quarantined, so Intel and Apple Silicon installs open cleanly. Full notarization is the only silent double-click for browser DMGs — not used here.
 
 ## Pipelines
 
@@ -23,16 +22,33 @@ Builds are **ad-hoc signed** and the app / installer clear **quarantine** (`xatt
 
 ### 2. `release.yml` — Public download
 - Triggers: tag `v*` **or** manual “Run workflow”
-- Builds the installable DMG on macOS
-- Publishes a **GitHub Release** with the DMG attached
+- Builds installable DMGs (Intel + Apple Silicon)
+- Publishes a **GitHub Release** with the DMGs attached
 
 ## Cut a release
 
 ```bash
 git checkout main
 git pull
-git tag v1.2.0
-git push origin v1.2.0
+# bump VERSION file first
+git tag v1.7.4
+git push origin v1.7.4
 ```
 
-Then open: https://github.com/Shahzaibzah00r/YouTube-Downloader/releases
+Or: **Actions → Release → Run workflow**.
+
+Users install with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh | bash
+```
+
+Or download from: https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest
+
+## Everyday push
+
+```bash
+git add -A
+git commit -m "Your message"
+git push -u origin main
+```

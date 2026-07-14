@@ -2,7 +2,7 @@
 # Install dependencies for Intel (x86_64) and Apple Silicon (arm64) Macs.
 set -euo pipefail
 
-echo "==> YouTube Downloader setup"
+echo "==> YTDownloader setup"
 ARCH="$(uname -m)"
 case "$ARCH" in
   arm64)  echo "Detected: Apple Silicon (arm64)";;

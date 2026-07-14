@@ -8,18 +8,20 @@ RELEASES="$ROOT/releases"
 APP_NAME="YTDownloader"
 EXEC_NAME="YTDownloader"
 APP="$DIST/$APP_NAME.app"
-ICON_SRC="$ROOT/Youtube Downloader/Assets.xcassets/AppIcon.appiconset/icon_512x512.png"
+ICON_SRC="$ROOT/assets/AppIcon.png"
 
 if [[ -n "${VERSION:-}" ]]; then
   :
 elif [[ -n "${1:-}" ]]; then
   VERSION="$1"
+elif [[ -f "$ROOT/VERSION" ]]; then
+  VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION")"
 elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --exact-match)"
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.3.0"
+  VERSION="1.7.4"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
@@ -46,9 +48,8 @@ fi
 
 # Bundle web UI + server
 cp "$ROOT/yt_downloader.py" "$APP/Contents/Resources/yt_downloader.py"
-cp "$ROOT/youtube_downloader_gui.py" "$APP/Contents/Resources/youtube_downloader_gui.py"
 cp "$ROOT/webui/index.html" "$ROOT/webui/styles.css" "$ROOT/webui/app.js" "$APP/Contents/Resources/webui/"
-# Version file for in-app update 
+# Version file for in-app update checks
 printf '%s\n' "$VERSION" > "$APP/Contents/Resources/VERSION"
 printf '%s\n' "$VERSION" > "$ROOT/VERSION"
 
@@ -180,24 +181,42 @@ fi
 
 osascript -e 'display notification "Installing YTDownloader…" with title "YTDownloader"' || true
 
+# Close any already-running copy first (process name is often Python, not YTDownloader)
+osascript >/dev/null 2>&1 <<'EOF' || true
+tell application "System Events"
+  try
+    set ids to unix id of every process whose bundle identifier is "com.shahzaibzah00r.ytdownloader"
+    repeat with pid in ids
+      do shell script "kill -9 " & pid
+    end repeat
+  end try
+end tell
+EOF
+pkill -9 -f "YTDownloader.app/Contents/MacOS/YTDownloader" >/dev/null 2>&1 || true
+pkill -9 -f "YTDownloader.app/Contents/Resources/yt_downloader.py" >/dev/null 2>&1 || true
+pkill -9 -f "/Applications/YTDownloader.app" >/dev/null 2>&1 || true
+for p in $(seq 8765 8784); do
+  lsof -tiTCP:"$p" -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+done
+sleep 0.4
+
 rm -rf "$DEST"
-# ditto preserves resources; fall back to cp
+# Clear quarantine on the DMG copy before install (browsers quarantine the whole volume)
+xattr -cr "$SRC" 2>/dev/null || true
+xattr -d com.apple.quarantine "$SRC" 2>/dev/null || true
+
 if command -v ditto >/dev/null 2>&1; then
   ditto "$SRC" "$DEST"
 else
   cp -R "$SRC" "$DEST"
 fi
 
-# Remove the “downloaded from internet” flag macOS adds — this is what blocks open
+# Remove the “downloaded from internet” flag — this is what blocks open
 xattr -cr "$DEST" 2>/dev/null || true
+xattr -d com.apple.quarantine "$DEST" 2>/dev/null || true
 codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 
-# Close any already-running copy, then open the installed app once
-osascript -e 'tell application "YTDownloader" to quit' >/dev/null 2>&1 || true
-pkill -f "YTDownloader.app/Contents/MacOS/YTDownloader" >/dev/null 2>&1 || true
-pkill -f "YTDownloader.app/Contents/Resources/yt_downloader.py" >/dev/null 2>&1 || true
-sleep 0.5
 open "$DEST"
 osascript -e 'display notification "YTDownloader is ready" with title "YTDownloader"' || true
 INSTALL
@@ -206,23 +225,22 @@ chmod +x "$STAGE/Install & Open.command"
 cat > "$STAGE/README.txt" <<EOF
 YTDownloader for macOS — $ARCH_FRIENDLY
 
-IMPORTANT (macOS security / Gatekeeper)
-  Double-clicking the .app after a GitHub download often shows:
-  “Apple could not verify YTDownloader.app…”
-  That is normal without a paid Apple Developer certificate.
+RECOMMENDED (no Gatekeeper quarantine):
+  curl -fsSL https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh | bash
+  (curl download is not quarantined; works on Intel and Apple Silicon)
 
-  Easiest fix — use the installer in this DMG:
-    1. Double-click “Install & Open.command”
-    2. If Terminal asks, click Open
-    3. The app installs to Applications and opens (quarantine cleared)
+From this DMG:
+  1. Double-click “Install & Open.command”
+  2. If Terminal asks, click Open
+  3. App installs to Applications and opens (quarantine cleared)
 
-  Or after dragging the app to Applications, run in Terminal:
+If you only dragged the .app and see “Apple could not verify…”:
     xattr -cr /Applications/YTDownloader.app
     open /Applications/YTDownloader.app
 
-  Or: click Done → System Settings → Privacy & Security → Open Anyway
+Or: System Settings → Privacy & Security → Open Anyway
 
-Which DMG should I download?
+Which DMG (if downloading manually)?
   • YTDownloader-…-Intel-macOS.dmg         → Intel MacBook / iMac
   • YTDownloader-…-AppleSilicon-macOS.dmg → M1 / M2 / M3 / M4 Macs
 
@@ -250,5 +268,5 @@ echo "✅ App:   $APP"
 echo "✅ DMG:   $DMG_ARCH"
 echo "✅ Also:  $DMG_GENERIC"
 echo "   Arch:  $ARCH_FRIENDLY"
-echo "   Tip:   Use “Install & Open.command” inside the DMG (clears Gatekeeper quarantine)"
+echo "   Tip:   curl install-release.sh | bash  (no quarantine) — or Install & Open.command in DMG"
 ls -lh "$APP" "$DMG_ARCH" "$DMG_GENERIC"

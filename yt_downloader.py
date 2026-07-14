@@ -23,14 +23,14 @@ ROOT = Path(__file__).resolve().parent
 WEBUI = ROOT / "webui"
 HOST = "127.0.0.1"
 PORT = 8765
+ACTIVE_PORT = PORT
 DEFAULT_DIR = str(Path.home() / "Downloads")
 HISTORY_PATH = Path.home() / ".ytdownloader" / "history.json"
 HISTORY_MAX = 20
 GITHUB_REPO = "Shahzaibzah00r/YouTube-Downloader"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
-APP_BUNDLE_ID = "com.shahzaibzah00r.ytdownloader"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.7.3"
+APP_VERSION_FALLBACK = "1.7.4"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
@@ -113,7 +113,7 @@ def path_looks_direct(url: str) -> bool:
 
 def _head_headers(url: str, timeout: int = 12) -> dict[str, str] | None:
     req = urllib.request.Request(
-        url, method="HEAD", headers={"User-Agent": "YTDownloader/1.6"}
+        url, method="HEAD", headers={"User-Agent": _ua()}
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -484,6 +484,10 @@ def app_version() -> str:
     return APP_VERSION_FALLBACK
 
 
+def _ua() -> str:
+    return f"YTDownloader/{app_version()}"
+
+
 def parse_version_tuple(raw: str) -> tuple[int, ...]:
     s = str(raw or "").strip().lstrip("v")
     parts: list[int] = []
@@ -540,6 +544,93 @@ def adhoc_codesign(path: Path | str) -> None:
 def prepare_app_for_open(path: Path | str) -> None:
     clear_quarantine(path)
     adhoc_codesign(path)
+    clear_quarantine(path)
+
+
+def schedule_app_relaunch(app_path: Path | str) -> None:
+    """
+    Spawn an external relaunch helper, then hard-exit this process.
+    AppleScript 'quit' fails when the process shows as Python, so we kill by PID/port/path.
+    """
+    app = Path(app_path).expanduser()
+    cache = Path.home() / "Library" / "Caches" / "YTDownloader"
+    cache.mkdir(parents=True, exist_ok=True)
+    script = cache / "relaunch.sh"
+    old_pid = os.getpid()
+    port = ACTIVE_PORT
+    # Written to disk so it survives after this process dies
+    script.write_text(
+        f"""#!/bin/bash
+set +e
+export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+APP={json.dumps(str(app))}
+OLD_PID={old_pid}
+PORT={port}
+
+# Let the HTTP response flush to the UI
+sleep 1.0
+
+# 1) Kill the exact process that started this update
+kill -TERM "$OLD_PID" 2>/dev/null || true
+sleep 0.35
+kill -9 "$OLD_PID" 2>/dev/null || true
+
+# 2) Kill anything still listening on our ports (old + new race)
+for p in $(seq {PORT} {PORT + 19}); do
+  lsof -tiTCP:"$p" -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+done
+lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+
+# 3) Kill by bundle id (works even when process name is Python)
+osascript <<'APPLESCRIPT' >/dev/null 2>&1 || true
+tell application "System Events"
+  try
+    set ids to unix id of every process whose bundle identifier is "com.shahzaibzah00r.ytdownloader"
+    repeat with pid in ids
+      do shell script "kill -9 " & pid
+    end repeat
+  end try
+  try
+    set ids to unix id of every process whose name contains "YTDownloader"
+    repeat with pid in ids
+      do shell script "kill -9 " & pid
+    end repeat
+  end try
+end tell
+APPLESCRIPT
+
+# 4) Path-based leftovers (launcher + embedded python)
+pkill -9 -f "YTDownloader.app/Contents/MacOS/YTDownloader" 2>/dev/null || true
+pkill -9 -f "YTDownloader.app/Contents/Resources/yt_downloader.py" 2>/dev/null || true
+pkill -9 -f "/Applications/YTDownloader.app" 2>/dev/null || true
+
+sleep 0.6
+
+# Strip quarantine again (updates can re-flag) then open ONE instance
+xattr -cr "$APP" 2>/dev/null || true
+xattr -d com.apple.quarantine "$APP" 2>/dev/null || true
+codesign --force --deep --sign - "$APP" 2>/dev/null || true
+xattr -cr "$APP" 2>/dev/null || true
+
+# Never use open -n (that forces a second window)
+open "$APP"
+"""
+    )
+    os.chmod(script, 0o755)
+    subprocess.Popen(
+        ["/bin/bash", str(script)],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        close_fds=True,
+    )
+
+    def _exit_soon() -> None:
+        time.sleep(1.4)
+        os._exit(0)
+
+    threading.Thread(target=_exit_soon, daemon=True).start()
 
 
 def detect_app_bundle() -> Path | None:
@@ -662,8 +753,12 @@ SRC={json.dumps(str(src_app))}
 DEST={json.dumps(str(dest_app))}
 rm -rf "$DEST"
 mkdir -p "$(dirname "$DEST")"
+# Clear quarantine on source first so ditto does not copy the flag
+xattr -cr "$SRC" 2>/dev/null || true
+xattr -d com.apple.quarantine "$SRC" 2>/dev/null || true
 ditto "$SRC" "$DEST"
 xattr -cr "$DEST" 2>/dev/null || true
+xattr -d com.apple.quarantine "$DEST" 2>/dev/null || true
 codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 """
@@ -751,22 +846,7 @@ def install_app_update(asset_url: str, asset_name: str | None = None) -> dict:
         prepare_app_for_open(installed)
         STATE.emit({"type": "log", "line": f"Updated → {installed}", "cls": "ok"})
         notify_macos("YTDownloader", "Update installed — relaunching…")
-        # Quit the running instance, then open the new build (do not use open -n)
-        relaunch_sh = f"""
-set -e
-APP={json.dumps(str(installed))}
-sleep 0.6
-osascript -e 'tell application "YTDownloader" to quit' >/dev/null 2>&1 || true
-# Stop leftover launcher / python from this (or previous) bundle
-pkill -f "YTDownloader.app/Contents/MacOS/YTDownloader" >/dev/null 2>&1 || true
-pkill -f "YTDownloader.app/Contents/Resources/yt_downloader.py" >/dev/null 2>&1 || true
-sleep 0.8
-open "$APP"
-"""
-        subprocess.Popen(
-            ["bash", "-lc", relaunch_sh],
-            start_new_session=True,
-        )
+        schedule_app_relaunch(installed)
         return {
             "ok": True,
             "path": str(installed),
@@ -875,7 +955,7 @@ def preview_youtube_oembed(url: str) -> dict | None:
     if not vid or is_playlist_url(url):
         return None
     api = f"https://www.youtube.com/oembed?format=json&url={quote(url, safe='')}"
-    req = urllib.request.Request(api, headers={"User-Agent": "YTDownloader/1.6"})
+    req = urllib.request.Request(api, headers={"User-Agent": _ua()})
     try:
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -1368,7 +1448,7 @@ def emit_item(
 def download_direct(url: str, outdir: Path, job_id: str = "job", title: str | None = None) -> tuple[bool, str | None]:
     label = title or filename_from_url(url)
     outdir.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(url, headers={"User-Agent": "YTDownloader/1.6"})
+    req = urllib.request.Request(url, headers={"User-Agent": _ua()})
     try:
         resp = urllib.request.urlopen(req, timeout=60)
     except urllib.error.HTTPError as exc:
@@ -2129,6 +2209,7 @@ def start_server() -> tuple[ThreadingHTTPServer, str]:
     if not WEBUI.exists():
         raise SystemExit(f"Missing webui folder: {WEBUI}")
 
+    global ACTIVE_PORT
     httpd = None
     last_err = None
     port = PORT
@@ -2142,6 +2223,7 @@ def start_server() -> tuple[ThreadingHTTPServer, str]:
     if httpd is None:
         raise SystemExit(f"Could not bind port: {last_err}")
 
+    ACTIVE_PORT = port
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     return httpd, f"http://{HOST}:{port}/"
