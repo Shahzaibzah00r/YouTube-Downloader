@@ -1095,6 +1095,18 @@ function listenEvents() {
     if (msg.type === "log") appendLog(msg.line, msg.cls || "");
     if (msg.type === "status") statusEl.textContent = msg.text;
     if (msg.type === "paused") setPauseUi(Boolean(msg.value));
+    if (msg.type === "app_update" && msg.result && msg.result.relaunch) {
+      statusEl.textContent = msg.result.message || "Relaunching…";
+      appendLog("Closing old window for update…", "muted");
+      // Best-effort close of the pywebview window; shell also quits the app
+      setTimeout(() => {
+        try {
+          window.close();
+        } catch {
+          /* ignore */
+        }
+      }, 400);
+    }
     if (msg.type === "progress") setProgress(msg.value, msg.speed);
     if (msg.type === "queue") {
       const text = msg.text || "";

@@ -30,7 +30,7 @@ GITHUB_REPO = "Shahzaibzah00r/YouTube-Downloader"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 APP_BUNDLE_ID = "com.shahzaibzah00r.ytdownloader"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.7.2"
+APP_VERSION_FALLBACK = "1.7.3"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
@@ -751,15 +751,27 @@ def install_app_update(asset_url: str, asset_name: str | None = None) -> dict:
         prepare_app_for_open(installed)
         STATE.emit({"type": "log", "line": f"Updated → {installed}", "cls": "ok"})
         notify_macos("YTDownloader", "Update installed — relaunching…")
+        # Quit the running instance, then open the new build (do not use open -n)
+        relaunch_sh = f"""
+set -e
+APP={json.dumps(str(installed))}
+sleep 0.6
+osascript -e 'tell application "YTDownloader" to quit' >/dev/null 2>&1 || true
+# Stop leftover launcher / python from this (or previous) bundle
+pkill -f "YTDownloader.app/Contents/MacOS/YTDownloader" >/dev/null 2>&1 || true
+pkill -f "YTDownloader.app/Contents/Resources/yt_downloader.py" >/dev/null 2>&1 || true
+sleep 0.8
+open "$APP"
+"""
         subprocess.Popen(
-            ["bash", "-lc", f"sleep 1; open -n {json.dumps(str(installed))}"],
+            ["bash", "-lc", relaunch_sh],
             start_new_session=True,
         )
         return {
             "ok": True,
             "path": str(installed),
             "relaunch": True,
-            "message": "Update installed. The app will relaunch.",
+            "message": "Update installed. Closing this window and opening the new version…",
         }
     finally:
         _detach_dmg(mount)

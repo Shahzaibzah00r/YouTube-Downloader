@@ -193,6 +193,11 @@ xattr -cr "$DEST" 2>/dev/null || true
 codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 
+# Close any already-running copy, then open the installed app once
+osascript -e 'tell application "YTDownloader" to quit' >/dev/null 2>&1 || true
+pkill -f "YTDownloader.app/Contents/MacOS/YTDownloader" >/dev/null 2>&1 || true
+pkill -f "YTDownloader.app/Contents/Resources/yt_downloader.py" >/dev/null 2>&1 || true
+sleep 0.5
 open "$DEST"
 osascript -e 'display notification "YTDownloader is ready" with title "YTDownloader"' || true
 INSTALL
