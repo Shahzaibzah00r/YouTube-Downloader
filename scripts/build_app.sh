@@ -249,7 +249,8 @@ This build: $ARCH_FRIENDLY ($HOST_ARCH)
 https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
 
-hdiutil create -volname "YTDownloader ${ARCH_LABEL}" -srcfolder "$STAGE" -ov -format UDZO "$DMG_ARCH" >/dev/null
+# No spaces in volname — keeps /Volumes paths easy for installers/parsers
+hdiutil create -volname "YTDownloader-${ARCH_LABEL}" -srcfolder "$STAGE" -ov -format UDZO "$DMG_ARCH" >/dev/null
 # Also keep a classic filename for backwards compatibility
 cp "$DMG_ARCH" "$DMG_GENERIC"
 rm -rf "$STAGE"

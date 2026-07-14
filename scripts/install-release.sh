@@ -60,12 +60,18 @@ echo "==> Downloading $TAG ($LABEL)…"
 curl -fL --progress-bar -o "$DMG" "$ASSET_URL"
 
 echo "==> Mounting…"
-ATTACH_OUT="$(hdiutil attach -nobrowse -readonly "$DMG")"
-MOUNT="$(printf '%s\n' "$ATTACH_OUT" | awk '/\/Volumes\//{print $NF; exit}')"
-if [[ -z "$MOUNT" || ! -d "$MOUNT" ]]; then
+# Volume names can contain spaces (e.g. "/Volumes/YTDownloader Intel") — never use awk $NF
+set +e
+ATTACH_OUT="$(hdiutil attach -nobrowse -readonly "$DMG" 2>&1)"
+ATTACH_RC=$?
+set -e
+MOUNT="$(printf '%s\n' "$ATTACH_OUT" | sed -n 's|.*\(/Volumes/.*\)|\1|p' | tail -1)"
+if [[ "$ATTACH_RC" -ne 0 || -z "$MOUNT" || ! -d "$MOUNT" ]]; then
   echo "ERROR: Could not mount DMG"
+  printf '%s\n' "$ATTACH_OUT" | sed 's/^/    /'
   exit 1
 fi
+echo "    Mounted: $MOUNT"
 
 SRC="$(find "$MOUNT" -maxdepth 1 -name "*.app" -print -quit)"
 if [[ -z "$SRC" || ! -d "$SRC" ]]; then
