@@ -1,5 +1,9 @@
 name: Release
 
+# YTDownloader is a Python + web UI app (not a native binary).
+# We build BOTH Intel- and AppleSilicon-named DMGs on macos-latest (fast).
+# Avoids long queues on scarce macos-13 Intel runners.
+
 on:
   push:
     tags:
@@ -7,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 1.4.0)"
+        description: "Version (e.g. 1.4.1)"
         required: true
-        default: "1.4.0"
+        default: "1.4.1"
 
 permissions:
   contents: write
@@ -19,19 +23,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            label: AppleSilicon
-            friendly: Apple Silicon (M1/M2/M3/M4)
-          - os: macos-13
-            label: Intel
-            friendly: Intel Mac (x86_64)
+  build-and-publish:
+    name: Build DMGs & publish
+    runs-on: macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -55,56 +49,40 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "number=$NUM" >> "$GITHUB_OUTPUT"
-          echo "machine=$(uname -m)" >> "$GITHUB_OUTPUT"
 
-      - name: Build installable .app + DMG
+      - name: Build Apple Silicon–named DMG
         env:
           VERSION: ${{ steps.ver.outputs.number }}
+          ARCH_LABEL: AppleSilicon
         run: |
           chmod +x scripts/build_app.sh
           ./scripts/build_app.sh
-          echo "Built on $(uname -m) as ${{ matrix.label }}"
-          ls -lh dist/*.dmg
-          test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-${{ matrix.label }}-macOS.dmg"
+          test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg"
+          cp "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg" \
+             "dist/keep-AppleSilicon.dmg"
 
-      - name: Upload arch artifact
+      - name: Build Intel–named DMG
+        env:
+          VERSION: ${{ steps.ver.outputs.number }}
+          ARCH_LABEL: Intel
+        run: |
+          ./scripts/build_app.sh
+          test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg"
+          # Restore Apple Silicon file (build_app clears dist/)
+          cp dist/keep-AppleSilicon.dmg \
+             "dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg"
+          rm -f dist/keep-AppleSilicon.dmg
+          ls -lh dist/*.dmg
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: YTDownloader-${{ steps.ver.outputs.tag }}-${{ matrix.label }}
+          name: YTDownloader-${{ steps.ver.outputs.tag }}
           path: |
-            dist/YTDownloader-v${{ steps.ver.outputs.number }}-${{ matrix.label }}-macOS.dmg
-            dist/YouTube-Downloader-macOS.dmg
+            dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg
+            dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg
           if-no-files-found: error
           retention-days: 90
-
-  publish:
-    name: Publish GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Resolve version
-        id: ver
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            RAW="${{ inputs.version }}"
-          else
-            RAW="${GITHUB_REF_NAME}"
-          fi
-          if [[ "$RAW" == v* ]]; then
-            echo "tag=$RAW" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=v$RAW" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Download all DMG artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: YTDownloader-${{ steps.ver.outputs.tag }}-*
-          path: release-assets
-          merge-multiple: true
-
-      - name: List release assets
-        run: find release-assets -type f -ls
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -124,9 +102,7 @@ jobs:
             | **Intel** MacBook / iMac | `YTDownloader-…-**Intel**-macOS.dmg` |
             | **Apple Silicon** M1 / M2 / **M3** / M4 | `YTDownloader-…-**AppleSilicon**-macOS.dmg` |
 
-            Not sure? Apple menu → **About This Mac**  
-            - Chip says **Intel** → Intel DMG  
-            - Chip says **M1 / M2 / M3 / M4** → AppleSilicon DMG  
+            Not sure? Apple menu → **About This Mac**
 
             ### Install
             1. Download the matching DMG
@@ -134,12 +110,8 @@ jobs:
             3. Open it — dark web UI opens in your browser
             4. Paste a YouTube URL → Download
             5. Click **Fix tools** if needed ([Homebrew](https://brew.sh))
-
-            ### Run from source
-            ```bash
-            python3 yt_downloader.py
-            ```
           files: |
-            release-assets/*.dmg
+            dist/YTDownloader-v${{ steps.ver.outputs.number }}-Intel-macOS.dmg
+            dist/YTDownloader-v${{ steps.ver.outputs.number }}-AppleSilicon-macOS.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

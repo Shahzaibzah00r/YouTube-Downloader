@@ -112,20 +112,25 @@ PLIST
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
 
 # Architecture label for download filenames
+# Override with ARCH_LABEL=Intel|AppleSilicon (CI builds both names on one fast runner)
 HOST_ARCH="$(uname -m)"
-case "$HOST_ARCH" in
-  arm64|aarch64)
-    ARCH_LABEL="AppleSilicon"
-    ARCH_FRIENDLY="Apple Silicon (M1 / M2 / M3 / M4)"
-    ;;
-  x86_64|amd64)
-    ARCH_LABEL="Intel"
-    ARCH_FRIENDLY="Intel Mac (x86_64)"
-    ;;
-  *)
-    ARCH_LABEL="$HOST_ARCH"
-    ARCH_FRIENDLY="$HOST_ARCH"
-    ;;
+if [[ -n "${ARCH_LABEL:-}" ]]; then
+  case "$ARCH_LABEL" in
+    AppleSilicon|Intel) ;;
+    *) echo "Unknown ARCH_LABEL=$ARCH_LABEL"; exit 1 ;;
+  esac
+else
+  case "$HOST_ARCH" in
+    arm64|aarch64) ARCH_LABEL="AppleSilicon" ;;
+    x86_64|amd64)  ARCH_LABEL="Intel" ;;
+    *)             ARCH_LABEL="$HOST_ARCH" ;;
+  esac
+fi
+
+case "$ARCH_LABEL" in
+  AppleSilicon) ARCH_FRIENDLY="Apple Silicon (M1 / M2 / M3 / M4)" ;;
+  Intel)        ARCH_FRIENDLY="Intel Mac (x86_64)" ;;
+  *)            ARCH_FRIENDLY="$ARCH_LABEL" ;;
 esac
 
 DMG_GENERIC="$DIST/YouTube-Downloader-macOS.dmg"
