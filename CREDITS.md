@@ -1,10 +1,12 @@
-# Credits & Attribution
+# Credits
 
-This project is based on and inspired by:
+**Shahzaib YouTube Downloader** is maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).
 
-- [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader) — original native macOS SwiftUI UI
+Inspired by / based on UI ideas from:
 
-Runtime tools (installed separately, not redistributed here by default):
+- [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader)
+
+Runtime tools (installed separately):
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- [FFmpeg](https://ffmpeg.org/) via Homebrew, [evermeet.cx](https://evermeet.cx/ffmpeg/) (Intel), or [martin-riedl.de](https://ffmpeg.martin-riedl.de/) (Apple Silicon)
+- [FFmpeg](https://ffmpeg.org/) via Homebrew

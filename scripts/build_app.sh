@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
-# Build an installable macOS .app (+ optional .dmg) for Intel and Apple Silicon.
+# Build an installable macOS .app + .dmg for Intel and Apple Silicon.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
-APP_NAME="YouTube Downloader"
+RELEASES="$ROOT/releases"
+APP_NAME="Shahzaib YouTube Downloader"
+EXEC_NAME="Shahzaib YouTube Downloader"
 APP="$DIST/$APP_NAME.app"
 ICON_SRC="$ROOT/Youtube Downloader/Assets.xcassets/AppIcon.appiconset/icon_512x512.png"
-VERSION="1.0.0"
+VERSION="1.1.0"
 
-echo "==> Building $APP_NAME.app"
+echo "==> Building $APP_NAME.app ($VERSION)"
 rm -rf "$DIST"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$RELEASES"
 
 # Icon
 if [[ -f "$ICON_SRC" ]]; then
@@ -30,17 +32,14 @@ if [[ -f "$ICON_SRC" ]]; then
   rm -rf "$DIST/icon.iconset"
 fi
 
-# Bundle GUI source
 cp "$ROOT/youtube_downloader_gui.py" "$APP/Contents/Resources/youtube_downloader_gui.py"
 
-# Launcher — works when double-clicked from /Applications
-cat > "$APP/Contents/MacOS/YouTube Downloader" <<'LAUNCH'
+cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 GUI="$ROOT/Resources/youtube_downloader_gui.py"
 
-# Prefer Homebrew Python if present (better tk), else system Python 3
 PYTHON=""
 for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
   if [[ -x "$candidate" ]]; then
@@ -52,32 +51,30 @@ for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/pytho
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 with tkinter is required.\n\nInstall Xcode Command Line Tools or Homebrew Python, then try again." buttons {"OK"} default button 1 with title "YouTube Downloader"'
+  osascript -e 'display dialog "Python 3 with tkinter is required.\n\nInstall Xcode Command Line Tools or Homebrew Python, then try again." buttons {"OK"} default button 1 with title "Shahzaib YouTube Downloader"'
   exit 1
 fi
 
-# Auto-install tools on first launch if missing
 if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
   if command -v brew >/dev/null 2>&1; then
-    osascript -e 'display notification "Installing yt-dlp and ffmpeg…" with title "YouTube Downloader"'
+    osascript -e 'display notification "Installing yt-dlp and ffmpeg…" with title "Shahzaib YouTube Downloader"'
     brew install yt-dlp ffmpeg || true
   fi
 fi
 
 exec "$PYTHON" "$GUI"
 LAUNCH
-chmod +x "$APP/Contents/MacOS/YouTube Downloader"
+chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
 
-# Info.plist
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>YouTube Downloader</string>
+  <string>Shahzaib YouTube Downloader</string>
   <key>CFBundleDisplayName</key>
-  <string>YouTube Downloader</string>
+  <string>Shahzaib YouTube Downloader</string>
   <key>CFBundleIdentifier</key>
   <string>com.shahzaibzah00r.youtubedownloader</string>
   <key>CFBundleVersion</key>
@@ -87,7 +84,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleExecutable</key>
-  <string>YouTube Downloader</string>
+  <string>$EXEC_NAME</string>
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>LSMinimumSystemVersion</key>
@@ -100,14 +97,10 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# PkgInfo
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
-
-# Copy install helper next to app
 cp "$ROOT/install.sh" "$DIST/install.sh" 2>/dev/null || true
 chmod +x "$DIST/install.sh" 2>/dev/null || true
 
-# Create DMG
 DMG="$DIST/YouTube-Downloader-macOS.dmg"
 STAGE="$DIST/dmg-stage"
 rm -rf "$STAGE" "$DMG"
@@ -115,24 +108,40 @@ mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cat > "$STAGE/README.txt" <<EOF
-YouTube Downloader for macOS (Intel + Apple Silicon)
+Shahzaib YouTube Downloader for macOS (Intel + Apple Silicon)
 
-1. Drag "YouTube Downloader" into Applications
+1. Drag "Shahzaib YouTube Downloader" into Applications
 2. Open it from Launchpad / Applications
 3. If macOS blocks it: Right-click → Open → Open
-4. On first use, click "Fix tools" if prompted (needs Homebrew)
+4. Use the Dark/Light toggle in the app (or Cmd+D)
+5. If tools are missing, click "Fix tools" (needs Homebrew)
 
-https://github.com/Shahzaibzah00r/YouTube-Downloader
+by Shahzaib — https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
 
-hdiutil create -volname "YouTube Downloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "Shahzaib YouTube Downloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 
-# Clear quarantine on local build
+# Publishable copy for GitHub downloads
+cp "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg"
+echo "$VERSION" > "$RELEASES/VERSION.txt"
+cat > "$RELEASES/README.md" <<EOF
+# Downloads
+
+| File | Description |
+|------|-------------|
+| [YouTube-Downloader-macOS.dmg](./YouTube-Downloader-macOS.dmg) | Installable app (Intel + Apple Silicon) |
+
+**Version:** $VERSION  
+**Author:** Shahzaib ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r))
+
+Install: open the DMG → drag into Applications.
+EOF
+
 xattr -cr "$APP" 2>/dev/null || true
 
 echo
 echo "✅ App:  $APP"
 echo "✅ DMG:  $DMG"
-ls -lh "$APP" "$DMG"
-file "$APP/Contents/MacOS/YouTube Downloader"
+echo "✅ Release copy: $RELEASES/YouTube-Downloader-macOS.dmg"
+ls -lh "$APP" "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg"

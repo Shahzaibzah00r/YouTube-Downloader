@@ -1,43 +1,47 @@
-# YouTube Downloader for macOS
+# Shahzaib YouTube Downloader
 
-Easy YouTube downloader for **Intel** and **Apple Silicon** Macs.
+Free macOS YouTube downloader by **Shahzaib** — works on **Intel** and **Apple Silicon**.
 
-Repo: https://github.com/Shahzaibzah00r/YouTube-Downloader
+**Repo:** https://github.com/Shahzaibzah00r/YouTube-Downloader  
+**Download (DMG):** https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest
 
-## Install (recommended)
+## Free download (installable)
 
-### Option A — DMG (after a release is published)
+1. Open the latest [Release](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest)
+2. Download **`YouTube-Downloader-macOS.dmg`**
+3. Open the DMG → drag **Shahzaib YouTube Downloader** into **Applications**
+4. First launch: Right-click → **Open** if macOS blocks it
+5. If tools are missing, click **Fix tools** (needs [Homebrew](https://brew.sh))
 
-1. Download `YouTube-Downloader-macOS.dmg` from [Releases](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases)
-2. Open the DMG
-3. Drag **YouTube Downloader** into **Applications**
-4. Open the app (Right-click → Open the first time if macOS blocks it)
-5. If tools are missing, click **Fix tools** inside the app (needs [Homebrew](https://brew.sh))
+Direct DMG link (latest on `main`):
 
-### Option B — one command from source
+https://github.com/Shahzaibzah00r/YouTube-Downloader/raw/main/releases/YouTube-Downloader-macOS.dmg
+
+## Install from source
 
 ```bash
+git clone git@github.com-personal:Shahzaibzah00r/YouTube-Downloader.git
+# or HTTPS:
 git clone https://github.com/Shahzaibzah00r/YouTube-Downloader.git
-cd Youtube-Downloader
+cd YouTube-Downloader
 ./install.sh
 ```
 
-This installs Homebrew tools (`yt-dlp`, `ffmpeg`), builds the `.app`, and copies it to `/Applications`.
+## Features
 
-### Option C — DMG from source
+- Dark & light mode (toggle in the app, or ⌘D) — remembers your choice
+- Paste link → choose quality → Download
+- Progress bar + live activity log
+- Quality: Best / 1080p / 720p / 480p / Audio MP3
+- Intel (`x86_64`) + Apple Silicon (`arm64`)
+- One-click **Fix tools** for `yt-dlp` + `ffmpeg`
+
+## Build the DMG yourself
 
 ```bash
 ./scripts/build_app.sh
 open dist/YouTube-Downloader-macOS.dmg
 ```
-
-## Features
-
-- Clean, reliable GUI (paste link → download)
-- Progress bar + live log
-- Quality: Best / 1080p / 720p / 480p / Audio MP3
-- Works on Intel (`x86_64`) and Apple Silicon (`arm64`)
-- **Fix tools** button installs dependencies automatically
 
 ## CLI
 
@@ -47,25 +51,17 @@ open dist/YouTube-Downloader-macOS.dmg
 ./download.sh "https://www.youtube.com/watch?v=VIDEO_ID" ~/Desktop 720
 ```
 
-## Native SwiftUI app (optional)
-
-Requires full Xcode:
-
-```bash
-open "Youtube Downloader.xcodeproj"
-# or
-./scripts/build_macos.sh
-```
-
 ## Requirements
 
 - macOS 13+
-- Homebrew (installer can guide you)
-- Python 3 with tkinter (included with macOS / CLT)
+- Homebrew (for `yt-dlp` / `ffmpeg`)
+- Python 3 with tkinter (macOS / Command Line Tools)
 
 ## Credits
 
-Inspired by [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader). See [CREDITS.md](./CREDITS.md).
+Maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).  
+Original SwiftUI inspiration: [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader).  
+See [CREDITS.md](./CREDITS.md).
 
 ## License
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""YouTube Downloader — polished GUI for Intel and Apple Silicon Macs."""
+"""Shahzaib YouTube Downloader — GUI for Intel and Apple Silicon Macs."""
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import queue
@@ -17,7 +18,10 @@ from urllib.parse import urlparse
 
 HOME = Path.home()
 DEFAULT_DIR = HOME / "Downloads"
+CONFIG_DIR = HOME / "Library" / "Application Support" / "ShahzaibYouTubeDownloader"
+CONFIG_FILE = CONFIG_DIR / "settings.json"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
+APP_NAME = "Shahzaib YouTube Downloader"
 
 QUALITY_OPTIONS = {
     "Best available": ["-f", "bv*+ba/b"],
@@ -30,16 +34,33 @@ QUALITY_OPTIONS = {
     ],
 }
 
-COLORS = {
-    "bg": "#F4F5F7",
-    "card": "#FFFFFF",
-    "text": "#1A1A1A",
-    "muted": "#5C6570",
-    "accent": "#E11D48",
-    "accent_hover": "#BE123C",
-    "border": "#D8DEE6",
-    "ok": "#15803D",
-    "warn": "#B45309",
+THEMES = {
+    "light": {
+        "bg": "#F4F5F7",
+        "card": "#FFFFFF",
+        "text": "#1A1A1A",
+        "muted": "#5C6570",
+        "accent": "#E11D48",
+        "border": "#D8DEE6",
+        "ok": "#15803D",
+        "log_bg": "#FAFBFC",
+        "trough": "#E8ECF0",
+        "entry_bg": "#FFFFFF",
+        "entry_fg": "#1A1A1A",
+    },
+    "dark": {
+        "bg": "#12151A",
+        "card": "#1C2128",
+        "text": "#E8EAED",
+        "muted": "#9AA3AD",
+        "accent": "#FB7185",
+        "border": "#2F3843",
+        "ok": "#4ADE80",
+        "log_bg": "#161B22",
+        "trough": "#2A323C",
+        "entry_bg": "#0F1318",
+        "entry_fg": "#E8EAED",
+    },
 }
 
 
@@ -80,13 +101,54 @@ def looks_like_video_url(text: str) -> bool:
     )
 
 
+def load_settings() -> dict:
+    try:
+        if CONFIG_FILE.exists():
+            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def save_settings(data: dict) -> None:
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def detect_system_theme() -> str:
+    """Return 'dark' or 'light' from macOS appearance when possible."""
+    try:
+        result = subprocess.run(
+            ["defaults", "read", "-g", "AppleInterfaceStyle"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode == 0 and "Dark" in (result.stdout or ""):
+            return "dark"
+    except Exception:
+        pass
+    return "light"
+
+
 class YouTubeDownloaderApp:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
-        self.root.title("YouTube Downloader")
-        self.root.geometry("720x640")
-        self.root.minsize(640, 560)
-        self.root.configure(bg=COLORS["bg"])
+        self.settings = load_settings()
+        saved = self.settings.get("theme")
+        if saved in ("light", "dark"):
+            self.theme_name = saved
+        else:
+            self.theme_name = detect_system_theme()
+        self.colors = THEMES[self.theme_name]
+
+        self.root.title(APP_NAME)
+        self.root.geometry("740x680")
+        self.root.minsize(640, 580)
+        self.root.configure(bg=self.colors["bg"])
 
         self.yt_dlp = resolve_tool("yt-dlp")
         self.ffmpeg = resolve_tool("ffmpeg")
@@ -96,67 +158,120 @@ class YouTubeDownloaderApp:
         self.quality = tk.StringVar(value="Best available")
         self.status = tk.StringVar(value="Paste a YouTube link to get started")
         self.progress_value = tk.DoubleVar(value=0.0)
+        self.theme_label = tk.StringVar(
+            value="Dark mode" if self.theme_name == "light" else "Light mode"
+        )
 
         self.busy = False
         self.proc: subprocess.Popen[str] | None = None
         self.log_q: queue.Queue[tuple[str, str]] = queue.Queue()
 
-        self._style()
+        self._style = ttk.Style()
+        self._apply_theme_styles()
         self._build()
         self._bind_keys()
         self._refresh_deps()
         self.root.after(100, self._drain_log)
         self.url_entry.focus_set()
 
-    def _style(self) -> None:
-        style = ttk.Style()
+    def _apply_theme_styles(self) -> None:
+        c = self.colors
+        style = self._style
         try:
             style.theme_use("clam")
         except tk.TclError:
             pass
-        style.configure("TFrame", background=COLORS["bg"])
-        style.configure("Card.TFrame", background=COLORS["card"])
-        style.configure("TLabel", background=COLORS["bg"], foreground=COLORS["text"], font=("Helvetica Neue", 12))
-        style.configure("Title.TLabel", background=COLORS["bg"], foreground=COLORS["text"], font=("Helvetica Neue", 22, "bold"))
-        style.configure("Muted.TLabel", background=COLORS["bg"], foreground=COLORS["muted"], font=("Helvetica Neue", 11))
-        style.configure("Card.TLabel", background=COLORS["card"], foreground=COLORS["text"], font=("Helvetica Neue", 12))
-        style.configure("CardMuted.TLabel", background=COLORS["card"], foreground=COLORS["muted"], font=("Helvetica Neue", 11))
-        style.configure("Status.TLabel", background=COLORS["bg"], foreground=COLORS["muted"], font=("Helvetica Neue", 11))
+        style.configure("TFrame", background=c["bg"])
+        style.configure("Card.TFrame", background=c["card"])
+        style.configure("TLabel", background=c["bg"], foreground=c["text"], font=("Helvetica Neue", 12))
+        style.configure(
+            "Title.TLabel",
+            background=c["bg"],
+            foreground=c["text"],
+            font=("Helvetica Neue", 22, "bold"),
+        )
+        style.configure(
+            "Muted.TLabel",
+            background=c["bg"],
+            foreground=c["muted"],
+            font=("Helvetica Neue", 11),
+        )
+        style.configure(
+            "Card.TLabel",
+            background=c["card"],
+            foreground=c["text"],
+            font=("Helvetica Neue", 12),
+        )
+        style.configure(
+            "CardMuted.TLabel",
+            background=c["card"],
+            foreground=c["muted"],
+            font=("Helvetica Neue", 11),
+        )
+        style.configure(
+            "Status.TLabel",
+            background=c["bg"],
+            foreground=c["muted"],
+            font=("Helvetica Neue", 11),
+        )
         style.configure("TButton", font=("Helvetica Neue", 12), padding=(12, 8))
         style.configure("Accent.TButton", font=("Helvetica Neue", 13, "bold"), padding=(16, 10))
-        style.configure("TEntry", padding=8, fieldbackground="#FFFFFF")
-        style.configure("TCombobox", padding=6)
+        style.configure(
+            "TEntry",
+            padding=8,
+            fieldbackground=c["entry_bg"],
+            foreground=c["entry_fg"],
+            insertcolor=c["text"],
+        )
+        style.configure(
+            "TCombobox",
+            padding=6,
+            fieldbackground=c["entry_bg"],
+            foreground=c["entry_fg"],
+            background=c["card"],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", c["entry_bg"])],
+            foreground=[("readonly", c["entry_fg"])],
+        )
         style.configure(
             "Accent.Horizontal.TProgressbar",
-            troughcolor="#E8ECF0",
-            background=COLORS["accent"],
-            bordercolor=COLORS["border"],
-            lightcolor=COLORS["accent"],
-            darkcolor=COLORS["accent"],
+            troughcolor=c["trough"],
+            background=c["accent"],
+            bordercolor=c["border"],
+            lightcolor=c["accent"],
+            darkcolor=c["accent"],
         )
 
     def _build(self) -> None:
-        shell = ttk.Frame(self.root, padding=20)
-        shell.pack(fill=tk.BOTH, expand=True)
+        self.shell = ttk.Frame(self.root, padding=20)
+        self.shell.pack(fill=tk.BOTH, expand=True)
 
-        header = ttk.Frame(shell)
+        header = ttk.Frame(self.shell)
         header.pack(fill=tk.X, pady=(0, 14))
-        ttk.Label(header, text="YouTube Downloader", style="Title.TLabel").pack(anchor=tk.W)
+        left_h = ttk.Frame(header)
+        left_h.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Label(left_h, text=APP_NAME, style="Title.TLabel").pack(anchor=tk.W)
         ttk.Label(
-            header,
-            text=f"macOS · Intel & Apple Silicon · {platform.machine()}",
+            left_h,
+            text=f"by Shahzaib · macOS · Intel & Apple Silicon · {platform.machine()}",
             style="Muted.TLabel",
         ).pack(anchor=tk.W, pady=(4, 0))
+        self.theme_btn = ttk.Button(
+            header, textvariable=self.theme_label, command=self._toggle_theme, width=12
+        )
+        self.theme_btn.pack(side=tk.RIGHT, anchor=tk.N)
 
-        card = tk.Frame(
-            shell,
-            bg=COLORS["card"],
-            highlightbackground=COLORS["border"],
+        self.card = tk.Frame(
+            self.shell,
+            bg=self.colors["card"],
+            highlightbackground=self.colors["border"],
             highlightthickness=1,
             bd=0,
         )
-        card.pack(fill=tk.X, pady=(0, 14))
-        inner = ttk.Frame(card, style="Card.TFrame", padding=18)
+        self.card.pack(fill=tk.X, pady=(0, 14))
+        inner = ttk.Frame(self.card, style="Card.TFrame", padding=18)
         inner.pack(fill=tk.X)
 
         ttk.Label(inner, text="Video or playlist URL", style="CardMuted.TLabel").pack(anchor=tk.W)
@@ -205,9 +320,11 @@ class YouTubeDownloaderApp:
         self.fix_btn = ttk.Button(actions, text="Fix tools", command=self._install_tools)
         self.fix_btn.pack(side=tk.RIGHT)
 
-        ttk.Label(shell, textvariable=self.status, style="Status.TLabel").pack(anchor=tk.W, pady=(0, 6))
+        ttk.Label(self.shell, textvariable=self.status, style="Status.TLabel").pack(
+            anchor=tk.W, pady=(0, 6)
+        )
         self.progress = ttk.Progressbar(
-            shell,
+            self.shell,
             mode="determinate",
             maximum=100,
             variable=self.progress_value,
@@ -215,43 +332,66 @@ class YouTubeDownloaderApp:
         )
         self.progress.pack(fill=tk.X, pady=(0, 12))
 
-        log_header = ttk.Frame(shell)
+        log_header = ttk.Frame(self.shell)
         log_header.pack(fill=tk.X)
         ttk.Label(log_header, text="Activity", style="Muted.TLabel").pack(side=tk.LEFT)
         ttk.Button(log_header, text="Clear", command=self._clear_log).pack(side=tk.RIGHT)
 
-        log_wrap = tk.Frame(
-            shell,
-            bg=COLORS["card"],
-            highlightbackground=COLORS["border"],
+        self.log_wrap = tk.Frame(
+            self.shell,
+            bg=self.colors["card"],
+            highlightbackground=self.colors["border"],
             highlightthickness=1,
         )
-        log_wrap.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
+        self.log_wrap.pack(fill=tk.BOTH, expand=True, pady=(6, 0))
         self.log = tk.Text(
-            log_wrap,
+            self.log_wrap,
             wrap=tk.WORD,
             font=("Menlo", 11),
-            bg="#FAFBFC",
-            fg=COLORS["text"],
+            bg=self.colors["log_bg"],
+            fg=self.colors["text"],
             relief=tk.FLAT,
             padx=12,
             pady=10,
             highlightthickness=0,
             borderwidth=0,
+            insertbackground=self.colors["text"],
         )
-        scroll = ttk.Scrollbar(log_wrap, command=self.log.yview)
+        scroll = ttk.Scrollbar(self.log_wrap, command=self.log.yview)
         self.log.configure(yscrollcommand=scroll.set)
         self.log.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.log.tag_configure("ok", foreground=COLORS["ok"])
-        self.log.tag_configure("err", foreground=COLORS["accent"])
-        self.log.tag_configure("muted", foreground=COLORS["muted"])
+        self._apply_log_tags()
+
+    def _apply_log_tags(self) -> None:
+        self.log.tag_configure("ok", foreground=self.colors["ok"])
+        self.log.tag_configure("err", foreground=self.colors["accent"])
+        self.log.tag_configure("muted", foreground=self.colors["muted"])
+
+    def _toggle_theme(self) -> None:
+        self.theme_name = "dark" if self.theme_name == "light" else "light"
+        self.colors = THEMES[self.theme_name]
+        self.theme_label.set("Dark mode" if self.theme_name == "light" else "Light mode")
+        self.settings["theme"] = self.theme_name
+        save_settings(self.settings)
+        self._recolor()
+
+    def _recolor(self) -> None:
+        c = self.colors
+        self.root.configure(bg=c["bg"])
+        self._apply_theme_styles()
+        self.card.configure(bg=c["card"], highlightbackground=c["border"])
+        self.log_wrap.configure(bg=c["card"], highlightbackground=c["border"])
+        self.log.configure(bg=c["log_bg"], fg=c["text"], insertbackground=c["text"])
+        self._apply_log_tags()
 
     def _bind_keys(self) -> None:
         self.root.bind("<Return>", lambda _e: self._start_download())
         self.root.bind("<Escape>", lambda _e: self._cancel())
         self.root.bind("<Command-v>", lambda _e: self._paste())
         self.root.bind("<Control-v>", lambda _e: self._paste())
+        self.root.bind("<Command-d>", lambda _e: self._toggle_theme())
+        self.root.bind("<Control-d>", lambda _e: self._toggle_theme())
 
     def _refresh_deps(self) -> None:
         self.yt_dlp = resolve_tool("yt-dlp")
@@ -259,7 +399,7 @@ class YouTubeDownloaderApp:
         if self.yt_dlp and self.ffmpeg:
             self.status.set("Ready — paste a link and click Download")
             self.download_btn.configure(state=tk.NORMAL)
-            self._append(f"Ready on {platform.machine()}", "ok")
+            self._append(f"Shahzaib YouTube Downloader · {platform.machine()} · {self.theme_name} theme", "ok")
             self._append(f"yt-dlp: {self.yt_dlp}", "muted")
             self._append(f"ffmpeg: {self.ffmpeg}", "muted")
         else:
@@ -465,9 +605,7 @@ class YouTubeDownloaderApp:
 def main() -> None:
     ensure_path()
     root = tk.Tk()
-    # Do not force tk scaling — it breaks layout on many Macs.
     try:
-        # Prefer a crisp default window on Retina without overscaling widgets.
         root.tk.call("tk", "scaling", 1.0)
     except tk.TclError:
         pass
