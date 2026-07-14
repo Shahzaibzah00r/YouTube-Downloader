@@ -65,8 +65,7 @@ git push origin v1.3.0
 
 ## Credits
 
-Maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).  
-Inspired by [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader).  
+Created and maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).  
 See [CREDITS.md](./CREDITS.md).
 
 ## License

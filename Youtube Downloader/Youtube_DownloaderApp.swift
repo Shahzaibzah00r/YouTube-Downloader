@@ -2,7 +2,7 @@
 //  Youtube_DownloaderApp.swift
 //  Youtube Downloader
 //
-//  Created by Sharad Jadhav on 19/07/25.
+//  Maintained by Shahzaib (@Shahzaibzah00r)
 //
 
 import SwiftUI

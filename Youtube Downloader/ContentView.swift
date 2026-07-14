@@ -7,21 +7,21 @@ struct AppHeaderView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Youtube Downloader")
+                    Text("YTDownloader")
                     Image(systemName: "video.fill")
                         .foregroundStyle(Color.accentColor)
                 }
                 .font(.largeTitle)
                 .bold()
                 
-                Text("A simple, minimal and high quality youtube downloader.")
+                Text("Simple, fast YouTube downloads for macOS.")
                     .foregroundStyle(Color.secondary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom)
             
             Button(action: {
-                if let url = URL(string: "https://github.com/jadhavsharad/Youtube-Downloader") {
+                if let url = URL(string: "https://github.com/Shahzaibzah00r/YouTube-Downloader") {
                     NSWorkspace.shared.open(url)
                 }
             }){

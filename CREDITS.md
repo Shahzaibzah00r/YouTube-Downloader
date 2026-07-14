@@ -1,10 +1,6 @@
 # Credits
 
-**Shahzaib YouTube Downloader** is maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).
-
-Inspired by / based on UI ideas from:
-
-- [jadhavsharad/Youtube-Downloader](https://github.com/jadhavsharad/Youtube-Downloader)
+**YTDownloader** is created and maintained by **Shahzaib** ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r)).
 
 Runtime tools (installed separately):
 
