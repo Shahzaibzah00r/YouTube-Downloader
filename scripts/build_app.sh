@@ -53,19 +53,27 @@ cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$HERE/Resources"
+RES="$HERE/Resources"
+cd "$RES"
 
 PYTHON=""
 for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
-  if [[ -x "$candidate" ]]; then
-    PYTHON="$candidate"
-    break
-  fi
+  if [[ -x "$candidate" ]]; then PYTHON="$candidate"; break; fi
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 is required.\n\nInstall Xcode Command Line Tools or Homebrew Python." buttons {"OK"} default button 1 with title "YTDownloader"'
+  osascript -e 'display dialog "Python 3 is required." buttons {"OK"} default button 1 with title "YTDownloader"'
   exit 1
+fi
+
+# App-local venv for pywebview (native Mac window, not browser)
+VENV="$HOME/Library/Application Support/YTDownloader/venv"
+if [[ ! -x "$VENV/bin/python" ]]; then
+  osascript -e 'display notification "Setting up YTDownloader (first launch)…" with title "YTDownloader"'
+  mkdir -p "$(dirname "$VENV")"
+  "$PYTHON" -m venv "$VENV"
+  "$VENV/bin/pip" install -U pip >/dev/null
+  "$VENV/bin/pip" install pywebview >/dev/null
 fi
 
 if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
@@ -75,8 +83,7 @@ if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; t
   fi
 fi
 
-# Open dark web UI in the browser
-exec "$PYTHON" yt_downloader.py
+exec "$VENV/bin/python" yt_downloader.py
 LAUNCH
 chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
 
@@ -150,7 +157,7 @@ Which DMG should I download?
 This build: $ARCH_FRIENDLY ($HOST_ARCH)
 
 1. Drag YTDownloader into Applications
-2. Open it — a dark web UI opens in your browser
+2. Open it — a native Mac app window appears (not the browser)
 3. Paste a YouTube URL and click Download
 4. If tools are missing, click Fix tools (needs Homebrew)
 

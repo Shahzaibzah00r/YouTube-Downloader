@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""YTDownloader — local dark web UI (stdlib only). Opens in your browser."""
+"""YTDownloader — native desktop app (HTML UI inside a Mac window)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,6 @@ import re
 import shutil
 import subprocess
 import threading
-import time
-import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -295,15 +293,13 @@ class Handler(SimpleHTTPRequestHandler):
         self._json(404, {"error": "Not found"})
 
 
-def main() -> None:
-    ensure_path()
+def start_server() -> tuple[ThreadingHTTPServer, str]:
     if not WEBUI.exists():
         raise SystemExit(f"Missing webui folder: {WEBUI}")
 
-    # Find a free port near 8765
-    port = PORT
     httpd = None
     last_err = None
+    port = PORT
     for p in range(PORT, PORT + 20):
         try:
             httpd = ThreadingHTTPServer((HOST, p), Handler)
@@ -314,15 +310,52 @@ def main() -> None:
     if httpd is None:
         raise SystemExit(f"Could not bind port: {last_err}")
 
-    url = f"http://{HOST}:{port}/"
-    print(f"YTDownloader running at {url}")
-    print("Press Ctrl+C to stop.")
-    threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd, f"http://{HOST}:{port}/"
+
+
+def open_native_window(url: str) -> bool:
+    """Open UI in a real macOS app window (not Safari/Chrome)."""
     try:
-        httpd.serve_forever()
-    except KeyboardInterrupt:
-        print("\nStopped.")
+        import webview  # type: ignore
+    except ImportError:
+        return False
+
+    webview.create_window(
+        title="YTDownloader",
+        url=url,
+        width=900,
+        height=720,
+        min_size=(700, 560),
+        background_color="#0b0d10",
+    )
+    # Cocoa / native window on macOS
+    webview.start(gui="cocoa")
+    return True
+
+
+def main() -> None:
+    ensure_path()
+    httpd, url = start_server()
+    print(f"YTDownloader backend: {url}")
+
+    try:
+        if open_native_window(url):
+            return
+        # Fallback only if pywebview is missing
+        import webbrowser
+
+        print("pywebview not installed — opening browser fallback.")
+        print("For a real app window:  pip install pywebview")
+        print("Or run:  ./setup.sh")
+        webbrowser.open(url)
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nStopped.")
     finally:
+        httpd.shutdown()
         httpd.server_close()
 
 

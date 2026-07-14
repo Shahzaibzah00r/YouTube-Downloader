@@ -1,3 +1,7 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
 .DS_Store
 **/.DS_Store
 xcuserdata/
@@ -15,14 +19,11 @@ dist/
 *.m4a
 *.wav
 *.flac
-.venv/
-__pycache__/
-*.pyc
 .idea/
 .vscode/
 *.log
 icon.iconset/
-# DMGs are published by GitHub Actions Releases (avoid bloating git)
 releases/*.dmg
 !releases/README.md
 !releases/VERSION.txt
+!releases/ARCH.txt

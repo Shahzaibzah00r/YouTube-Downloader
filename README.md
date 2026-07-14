@@ -14,12 +14,16 @@ Dark web UI (HTML/CSS) in your browser — reliable and easy to use.
 ```bash
 git clone https://github.com/Shahzaibzah00r/YouTube-Downloader.git
 cd YouTube-Downloader
-./setup.sh          # once: brew install yt-dlp ffmpeg
-python3 yt_downloader.py
+./setup.sh                 # once: tools + native window support
+./Open\ YTDownloader.command
 ```
 
-Opens **http://127.0.0.1:8765/** with a dark UI.  
-Or double-click **`Open YTDownloader.command`**.
+Opens a **real Mac app window** (not the browser).  
+Or:
+
+```bash
+.venv/bin/python yt_downloader.py
+```
 
 ## Free download (installable DMG)
 

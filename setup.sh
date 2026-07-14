@@ -30,27 +30,23 @@ fi
 echo "==> Installing yt-dlp and ffmpeg"
 brew install yt-dlp ffmpeg
 
-echo "==> Making scripts executable"
+echo "==> Setting up Python app window (pywebview)"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-chmod +x "$ROOT/download.sh" \
-         "$ROOT/setup.sh" \
-         "$ROOT/youtube_downloader_gui.py" \
-         "$ROOT/Open YouTube Downloader.command" \
-         "$ROOT/scripts/build_macos.sh" 2>/dev/null || true
+PYTHON=""
+for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+  if [[ -x "$candidate" ]]; then PYTHON="$candidate"; break; fi
+done
+"$PYTHON" -m venv "$ROOT/.venv"
+"$ROOT/.venv/bin/pip" install -U pip
+"$ROOT/.venv/bin/pip" install -r "$ROOT/requirements.txt"
 
 echo
 echo "✅ Setup complete on $ARCH"
 echo "   yt-dlp:  $(command -v yt-dlp)"
 echo "   ffmpeg:  $(command -v ffmpeg)"
-echo "   ffprobe: $(command -v ffprobe)"
+echo "   python:  $ROOT/.venv/bin/python"
 echo
-echo "Run the easy GUI:"
-echo "  open \"$ROOT/Open YouTube Downloader.command\""
+echo "Run the app window:"
+echo "  \"$ROOT/.venv/bin/python\" \"$ROOT/yt_downloader.py\""
 echo "  # or"
-echo "  python3 \"$ROOT/youtube_downloader_gui.py\""
-echo
-echo "CLI:"
-echo "  \"$ROOT/download.sh\" \"https://www.youtube.com/watch?v=VIDEO_ID\""
-echo
-echo "Native Swift UI (requires full Xcode):"
-echo "  open \"$ROOT/Youtube Downloader.xcodeproj\""
+echo "  open \"$ROOT/Open YTDownloader.command\""
