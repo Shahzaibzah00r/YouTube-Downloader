@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Install Shahzaib YouTube Downloader (Intel or Apple Silicon).
+# Install YTDownloader (Intel or Apple Silicon).
 set -euo pipefail
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-APP_NAME="Shahzaib YouTube Downloader"
+APP_NAME="YTDownloader"
 DEST="/Applications/$APP_NAME.app"
 
-echo "==> Shahzaib YouTube Downloader installer"
+echo "==> YTDownloader installer"
 echo "    CPU: $(uname -m)"
 
 if ! command -v brew >/dev/null 2>&1; then
@@ -42,4 +42,4 @@ xattr -cr "$DEST" 2>/dev/null || true
 echo
 echo "✅ Installed: $DEST"
 open "$DEST"
-echo "Tip: first launch → Right-click the app → Open → Open"
+echo "A dark web UI will open in your browser."

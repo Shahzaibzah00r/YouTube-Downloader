@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
-# Build an installable macOS .app + .dmg for Intel and Apple Silicon.
+# Build an installable macOS .app + .dmg for YTDownloader (web UI).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DIST="$ROOT/dist"
 RELEASES="$ROOT/releases"
-APP_NAME="Shahzaib YouTube Downloader"
-EXEC_NAME="Shahzaib YouTube Downloader"
+APP_NAME="YTDownloader"
+EXEC_NAME="YTDownloader"
 APP="$DIST/$APP_NAME.app"
 ICON_SRC="$ROOT/Youtube Downloader/Assets.xcassets/AppIcon.appiconset/icon_512x512.png"
 
-# Version source (CI-friendly): VERSION env → first arg → git tag → fallback
 if [[ -n "${VERSION:-}" ]]; then
   :
 elif [[ -n "${1:-}" ]]; then
@@ -20,17 +19,15 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.1.0"
+  VERSION="1.3.0"
 fi
-# Strip leading v for CFBundleShortVersionString friendliness, keep both
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
 
 echo "==> Building $APP_NAME.app ($VERSION_TAG)"
 rm -rf "$DIST"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$RELEASES"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/webui" "$RELEASES"
 
-# Icon
 if [[ -f "$ICON_SRC" ]]; then
   mkdir -p "$DIST/icon.iconset"
   sips -z 16 16     "$ICON_SRC" --out "$DIST/icon.iconset/icon_16x16.png" >/dev/null
@@ -47,37 +44,39 @@ if [[ -f "$ICON_SRC" ]]; then
   rm -rf "$DIST/icon.iconset"
 fi
 
+# Bundle web UI + server
+cp "$ROOT/yt_downloader.py" "$APP/Contents/Resources/yt_downloader.py"
 cp "$ROOT/youtube_downloader_gui.py" "$APP/Contents/Resources/youtube_downloader_gui.py"
+cp "$ROOT/webui/index.html" "$ROOT/webui/styles.css" "$ROOT/webui/app.js" "$APP/Contents/Resources/webui/"
 
 cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-GUI="$ROOT/Resources/youtube_downloader_gui.py"
+HERE="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$HERE/Resources"
 
 PYTHON=""
 for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
   if [[ -x "$candidate" ]]; then
-    if "$candidate" -c "import tkinter" >/dev/null 2>&1; then
-      PYTHON="$candidate"
-      break
-    fi
+    PYTHON="$candidate"
+    break
   fi
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 with tkinter is required.\n\nInstall Xcode Command Line Tools or Homebrew Python, then try again." buttons {"OK"} default button 1 with title "Shahzaib YouTube Downloader"'
+  osascript -e 'display dialog "Python 3 is required.\n\nInstall Xcode Command Line Tools or Homebrew Python." buttons {"OK"} default button 1 with title "YTDownloader"'
   exit 1
 fi
 
 if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
   if command -v brew >/dev/null 2>&1; then
-    osascript -e 'display notification "Installing yt-dlp and ffmpeg…" with title "Shahzaib YouTube Downloader"'
+    osascript -e 'display notification "Installing yt-dlp and ffmpeg…" with title "YTDownloader"'
     brew install yt-dlp ffmpeg || true
   fi
 fi
 
-exec "$PYTHON" "$GUI"
+# Open dark web UI in the browser
+exec "$PYTHON" yt_downloader.py
 LAUNCH
 chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
 
@@ -87,11 +86,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>Shahzaib YouTube Downloader</string>
+  <string>YTDownloader</string>
   <key>CFBundleDisplayName</key>
-  <string>Shahzaib YouTube Downloader</string>
+  <string>YTDownloader</string>
   <key>CFBundleIdentifier</key>
-  <string>com.shahzaibzah00r.youtubedownloader</string>
+  <string>com.shahzaibzah00r.ytdownloader</string>
   <key>CFBundleVersion</key>
   <string>$VERSION</string>
   <key>CFBundleShortVersionString</key>
@@ -106,8 +105,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <string>13.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
-  <key>NSPrincipalClass</key>
-  <string>NSApplication</string>
 </dict>
 </plist>
 PLIST
@@ -123,40 +120,25 @@ mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cat > "$STAGE/README.txt" <<EOF
-Shahzaib YouTube Downloader for macOS (Intel + Apple Silicon)
+YTDownloader for macOS (Intel + Apple Silicon)
 
-1. Drag "Shahzaib YouTube Downloader" into Applications
-2. Open it from Launchpad / Applications
-3. If macOS blocks it: Right-click → Open → Open
-4. Use the Dark/Light toggle in the app (or Cmd+D)
-5. If tools are missing, click "Fix tools" (needs Homebrew)
+1. Drag YTDownloader into Applications
+2. Open it — a dark web UI opens in your browser
+3. Paste a YouTube URL and click Download
+4. If tools are missing, click Fix tools (needs Homebrew)
 
-by Shahzaib — https://github.com/Shahzaibzah00r/YouTube-Downloader
+https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
 
-hdiutil create -volname "Shahzaib YouTube Downloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "YTDownloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
 rm -rf "$STAGE"
 
-# Publishable copy for GitHub downloads
-cp "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg"
+cp "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg" 2>/dev/null || true
 echo "$VERSION" > "$RELEASES/VERSION.txt"
-cat > "$RELEASES/README.md" <<EOF
-# Downloads
-
-| File | Description |
-|------|-------------|
-| [YouTube-Downloader-macOS.dmg](./YouTube-Downloader-macOS.dmg) | Installable app (Intel + Apple Silicon) |
-
-**Version:** $VERSION  
-**Author:** Shahzaib ([@Shahzaibzah00r](https://github.com/Shahzaibzah00r))
-
-Install: open the DMG → drag into Applications.
-EOF
 
 xattr -cr "$APP" 2>/dev/null || true
 
 echo
 echo "✅ App:  $APP"
 echo "✅ DMG:  $DMG"
-echo "✅ Release copy: $RELEASES/YouTube-Downloader-macOS.dmg"
-ls -lh "$APP" "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg"
+ls -lh "$APP" "$DMG"

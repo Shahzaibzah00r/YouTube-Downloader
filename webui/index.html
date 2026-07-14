@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>YTDownloader</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div>
+        <h1>YTDownloader</h1>
+        <p class="sub">Paste a YouTube link · pick quality · download</p>
+      </div>
+      <div class="pill" id="archPill">macOS</div>
+    </header>
+
+    <section class="card">
+      <label for="url">Video or playlist URL</label>
+      <div class="row">
+        <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false" />
+        <button type="button" class="btn ghost" id="pasteBtn">Paste</button>
+      </div>
+
+      <div class="grid2">
+        <div>
+          <label for="quality">Quality</label>
+          <select id="quality">
+            <option value="best">Best available</option>
+            <option value="1080">1080p MP4</option>
+            <option value="720">720p MP4</option>
+            <option value="480">480p MP4</option>
+            <option value="audio">Audio only (MP3)</option>
+          </select>
+        </div>
+        <div>
+          <label for="outdir">Save folder</label>
+          <div class="row">
+            <input id="outdir" type="text" />
+            <button type="button" class="btn ghost" id="folderBtn" title="Use Downloads">Downloads</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="downloadBtn">Download</button>
+        <button type="button" class="btn danger" id="cancelBtn" disabled>Cancel</button>
+        <button type="button" class="btn ghost" id="openBtn">Open folder</button>
+        <button type="button" class="btn ghost" id="fixBtn">Fix tools</button>
+      </div>
+
+      <p class="status" id="status">Starting…</p>
+      <div class="progress"><div class="bar" id="bar"></div></div>
+    </section>
+
+    <section class="card log-card">
+      <div class="log-head">
+        <span>Activity</span>
+        <button type="button" class="btn tiny" id="clearBtn">Clear</button>
+      </div>
+      <pre id="log" class="log"></pre>
+    </section>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>
