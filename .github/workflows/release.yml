@@ -1,0 +1,110 @@
+name: Release
+
+# Best practice for this project:
+# - Tag a version (v1.2.0) → macOS runner builds the DMG → GitHub Release gets the file
+# - Users download from Releases (not from committing binaries into git)
+#
+# Create a release:
+#   git tag v1.2.0
+#   git push origin v1.2.0
+#
+# Or: Actions → Release → Run workflow
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (e.g. 1.2.0) — used only for workflow_dispatch"
+        required: true
+        default: "1.2.0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build macOS DMG & publish
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RAW="${{ inputs.version }}"
+          else
+            RAW="${GITHUB_REF_NAME}"
+          fi
+          # Normalize: ensure leading v for tag/release name; strip for CFBundle
+          if [[ "$RAW" == v* ]]; then
+            TAG="$RAW"
+            NUM="${RAW#v}"
+          else
+            TAG="v$RAW"
+            NUM="$RAW"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "number=$NUM" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: $TAG ($NUM)"
+
+      - name: Build installable .app + DMG
+        env:
+          VERSION: ${{ steps.ver.outputs.number }}
+        run: |
+          chmod +x scripts/build_app.sh
+          ./scripts/build_app.sh
+          test -f dist/YouTube-Downloader-macOS.dmg
+          ls -lh dist/YouTube-Downloader-macOS.dmg
+          # Rename with version for clearer downloads
+          cp dist/YouTube-Downloader-macOS.dmg \
+            "dist/Shahzaib-YouTube-Downloader-${{ steps.ver.outputs.tag }}-macOS.dmg"
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shahzaib-YouTube-Downloader-${{ steps.ver.outputs.tag }}
+          path: |
+            dist/YouTube-Downloader-macOS.dmg
+            dist/Shahzaib-YouTube-Downloader-${{ steps.ver.outputs.tag }}-macOS.dmg
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: Shahzaib YouTube Downloader ${{ steps.ver.outputs.tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ## Shahzaib YouTube Downloader ${{ steps.ver.outputs.tag }}
+
+            Free installable build for **Intel** and **Apple Silicon** Macs.
+
+            ### Install
+            1. Download **`YouTube-Downloader-macOS.dmg`**
+            2. Open the DMG → drag **Shahzaib YouTube Downloader** into **Applications**
+            3. First launch: Right-click → **Open** (Gatekeeper)
+            4. Toggle **Dark / Light** mode in the app (⌘D)
+            5. Click **Fix tools** if `yt-dlp` / `ffmpeg` are missing ([Homebrew](https://brew.sh))
+
+            ### Notes
+            - Unsigned open-source build (normal for indie tools). Use Right-click → Open once.
+            - Built automatically by GitHub Actions on macOS.
+          files: |
+            dist/YouTube-Downloader-macOS.dmg
+            dist/Shahzaib-YouTube-Downloader-${{ steps.ver.outputs.tag }}-macOS.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

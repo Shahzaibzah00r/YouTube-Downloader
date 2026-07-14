@@ -22,6 +22,7 @@ __pycache__/
 .vscode/
 *.log
 icon.iconset/
-# Keep public downloadable DMG in releases/
-!releases/
-!releases/**
+# DMGs are published by GitHub Actions Releases (avoid bloating git)
+releases/*.dmg
+!releases/README.md
+!releases/VERSION.txt

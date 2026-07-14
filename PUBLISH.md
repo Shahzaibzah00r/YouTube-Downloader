@@ -1,23 +1,30 @@
-# Publish to personal GitHub (Shahzaibzah00r)
+# Publish checklist (Shahzaib)
 
-Remote (matches your SSH config Host `github.com-personal`):
+Remote:
 
 ```bash
 git remote set-url origin git@github.com-personal:Shahzaibzah00r/YouTube-Downloader.git
 ```
 
-```bash
-./scripts/build_app.sh
-git add -A
-git commit -m "Release Shahzaib YouTube Downloader with DMG"
-git push -u origin main
+## Everyday push
 
-# Optional GitHub Release (after: gh auth login — personal account)
-gh release create v1.1.0 releases/YouTube-Downloader-macOS.dmg \
-  --title "v1.1.0 — Shahzaib YouTube Downloader" \
-  --notes "Installable DMG for Intel + Apple Silicon. Dark/light mode included."
+```bash
+git add -A
+git commit -m "Your message"
+git push -u origin main
+# CI runs automatically
 ```
 
-Public DMG on main:
+## Public downloadable build (recommended)
 
-https://github.com/Shahzaibzah00r/YouTube-Downloader/raw/main/releases/YouTube-Downloader-macOS.dmg
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+# Release workflow builds DMG and attaches it to the GitHub Release
+```
+
+Or: **Actions → Release → Run workflow**.
+
+Users download from: https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest
+
+See [docs/CI_CD.md](./docs/CI_CD.md).

@@ -9,9 +9,24 @@ APP_NAME="Shahzaib YouTube Downloader"
 EXEC_NAME="Shahzaib YouTube Downloader"
 APP="$DIST/$APP_NAME.app"
 ICON_SRC="$ROOT/Youtube Downloader/Assets.xcassets/AppIcon.appiconset/icon_512x512.png"
-VERSION="1.1.0"
 
-echo "==> Building $APP_NAME.app ($VERSION)"
+# Version source (CI-friendly): VERSION env → first arg → git tag → fallback
+if [[ -n "${VERSION:-}" ]]; then
+  :
+elif [[ -n "${1:-}" ]]; then
+  VERSION="$1"
+elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
+  VERSION="$(git -C "$ROOT" describe --tags --exact-match)"
+elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
+  VERSION="$(git -C "$ROOT" describe --tags --always)"
+else
+  VERSION="1.1.0"
+fi
+# Strip leading v for CFBundleShortVersionString friendliness, keep both
+VERSION_TAG="$VERSION"
+VERSION="${VERSION#v}"
+
+echo "==> Building $APP_NAME.app ($VERSION_TAG)"
 rm -rf "$DIST"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$RELEASES"
 

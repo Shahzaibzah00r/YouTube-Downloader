@@ -1,32 +1,60 @@
 name: CI
 
+# Runs on every push/PR — fast checks only (no notarization / signing required).
 on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  scripts:
+  validate:
+    name: Validate
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Syntax-check shell scripts
         run: |
           bash -n setup.sh
           bash -n download.sh
+          bash -n install.sh
           bash -n "Open YouTube Downloader.command"
+          bash -n scripts/build_app.sh
           bash -n scripts/build_macos.sh
 
       - name: Syntax-check Python GUI
         run: python3 -m py_compile youtube_downloader_gui.py
 
-      - name: Required files present
+      - name: Required project files
         run: |
           test -f README.md
           test -f LICENSE
           test -f setup.sh
           test -f download.sh
+          test -f install.sh
           test -f youtube_downloader_gui.py
+          test -f scripts/build_app.sh
           test -f "Youtube Downloader.xcodeproj/project.pbxproj"
           test -f "Youtube Downloader/downloadViewModel.swift"
+
+      - name: Smoke-build .app + DMG
+        run: |
+          chmod +x scripts/build_app.sh
+          VERSION="ci-${GITHUB_SHA::7}" ./scripts/build_app.sh
+          test -d "dist/Shahzaib YouTube Downloader.app"
+          test -f dist/YouTube-Downloader-macOS.dmg
+          ls -lh dist/YouTube-Downloader-macOS.dmg
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YouTube-Downloader-macOS-ci
+          path: dist/YouTube-Downloader-macOS.dmg
+          if-no-files-found: error
+          retention-days: 14
