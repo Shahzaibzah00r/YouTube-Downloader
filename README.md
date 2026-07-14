@@ -24,7 +24,15 @@ Or double-click **`Open YTDownloader.command`**.
 ## Free download (installable DMG)
 
 1. Open the latest **[Release](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest)**
-2. Download **`YouTube-Downloader-macOS.dmg`**
+2. Download the DMG that matches your Mac:
+
+| Your Mac | File name |
+|----------|-----------|
+| **Intel** MacBook / iMac | `YTDownloader-…-**Intel**-macOS.dmg` |
+| **Apple Silicon** M1 / M2 / **M3** / M4 | `YTDownloader-…-**AppleSilicon**-macOS.dmg` |
+
+Not sure? Apple menu → **About This Mac** (Chip = Intel or M1/M2/M3/M4).
+
 3. Drag **YTDownloader** into **Applications**
 4. Open it — the dark web UI launches in your browser
 5. If tools are missing, click **Fix tools** ([Homebrew](https://brew.sh))

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 1.3.0)"
+        description: "Version (e.g. 1.4.0)"
         required: true
-        default: "1.3.0"
+        default: "1.4.0"
 
 permissions:
   contents: write
@@ -19,9 +19,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-release:
-    name: Build macOS DMG & publish
-    runs-on: macos-latest
+  build:
+    name: Build (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: AppleSilicon
+            friendly: Apple Silicon (M1/M2/M3/M4)
+          - os: macos-13
+            label: Intel
+            friendly: Intel Mac (x86_64)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,6 +55,7 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "number=$NUM" >> "$GITHUB_OUTPUT"
+          echo "machine=$(uname -m)" >> "$GITHUB_OUTPUT"
 
       - name: Build installable .app + DMG
         env:
@@ -52,20 +63,48 @@ jobs:
         run: |
           chmod +x scripts/build_app.sh
           ./scripts/build_app.sh
-          test -d dist/YTDownloader.app
-          test -f dist/YouTube-Downloader-macOS.dmg
-          cp dist/YouTube-Downloader-macOS.dmg \
-            "dist/YTDownloader-${{ steps.ver.outputs.tag }}-macOS.dmg"
+          echo "Built on $(uname -m) as ${{ matrix.label }}"
+          ls -lh dist/*.dmg
+          test -f "dist/YTDownloader-v${{ steps.ver.outputs.number }}-${{ matrix.label }}-macOS.dmg"
 
-      - name: Upload build artifact
+      - name: Upload arch artifact
         uses: actions/upload-artifact@v4
         with:
-          name: YTDownloader-${{ steps.ver.outputs.tag }}
+          name: YTDownloader-${{ steps.ver.outputs.tag }}-${{ matrix.label }}
           path: |
+            dist/YTDownloader-v${{ steps.ver.outputs.number }}-${{ matrix.label }}-macOS.dmg
             dist/YouTube-Downloader-macOS.dmg
-            dist/YTDownloader-${{ steps.ver.outputs.tag }}-macOS.dmg
           if-no-files-found: error
           retention-days: 90
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            RAW="${{ inputs.version }}"
+          else
+            RAW="${GITHUB_REF_NAME}"
+          fi
+          if [[ "$RAW" == v* ]]; then
+            echo "tag=$RAW" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=v$RAW" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download all DMG artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: YTDownloader-${{ steps.ver.outputs.tag }}-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: find release-assets -type f -ls
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -78,10 +117,19 @@ jobs:
           body: |
             ## YTDownloader ${{ steps.ver.outputs.tag }}
 
-            Free installable build for **Intel** and **Apple Silicon** Macs.
+            ### Which DMG should I download?
+
+            | Your Mac | Download this file |
+            |----------|--------------------|
+            | **Intel** MacBook / iMac | `YTDownloader-…-**Intel**-macOS.dmg` |
+            | **Apple Silicon** M1 / M2 / **M3** / M4 | `YTDownloader-…-**AppleSilicon**-macOS.dmg` |
+
+            Not sure? Apple menu → **About This Mac**  
+            - Chip says **Intel** → Intel DMG  
+            - Chip says **M1 / M2 / M3 / M4** → AppleSilicon DMG  
 
             ### Install
-            1. Download **`YouTube-Downloader-macOS.dmg`**
+            1. Download the matching DMG
             2. Drag **YTDownloader** into **Applications**
             3. Open it — dark web UI opens in your browser
             4. Paste a YouTube URL → Download
@@ -91,12 +139,7 @@ jobs:
             ```bash
             python3 yt_downloader.py
             ```
-
-            ### Notes
-            - Unsigned open-source build. First open: Right-click → Open.
-            - Built by GitHub Actions on macOS.
           files: |
-            dist/YouTube-Downloader-macOS.dmg
-            dist/YTDownloader-${{ steps.ver.outputs.tag }}-macOS.dmg
+            release-assets/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -110,17 +110,39 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 echo -n "APPL????" > "$APP/Contents/PkgInfo"
-cp "$ROOT/install.sh" "$DIST/install.sh" 2>/dev/null || true
-chmod +x "$DIST/install.sh" 2>/dev/null || true
 
-DMG="$DIST/YouTube-Downloader-macOS.dmg"
+# Architecture label for download filenames
+HOST_ARCH="$(uname -m)"
+case "$HOST_ARCH" in
+  arm64|aarch64)
+    ARCH_LABEL="AppleSilicon"
+    ARCH_FRIENDLY="Apple Silicon (M1 / M2 / M3 / M4)"
+    ;;
+  x86_64|amd64)
+    ARCH_LABEL="Intel"
+    ARCH_FRIENDLY="Intel Mac (x86_64)"
+    ;;
+  *)
+    ARCH_LABEL="$HOST_ARCH"
+    ARCH_FRIENDLY="$HOST_ARCH"
+    ;;
+esac
+
+DMG_GENERIC="$DIST/YouTube-Downloader-macOS.dmg"
+DMG_ARCH="$DIST/YTDownloader-v${VERSION}-${ARCH_LABEL}-macOS.dmg"
 STAGE="$DIST/dmg-stage"
-rm -rf "$STAGE" "$DMG"
+rm -rf "$STAGE" "$DMG_GENERIC" "$DMG_ARCH"
 mkdir -p "$STAGE"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 cat > "$STAGE/README.txt" <<EOF
-YTDownloader for macOS (Intel + Apple Silicon)
+YTDownloader for macOS — $ARCH_FRIENDLY
+
+Which DMG should I download?
+  • YTDownloader-…-Intel-macOS.dmg         → Intel MacBook / iMac
+  • YTDownloader-…-AppleSilicon-macOS.dmg → M1 / M2 / M3 / M4 Macs
+
+This build: $ARCH_FRIENDLY ($HOST_ARCH)
 
 1. Drag YTDownloader into Applications
 2. Open it — a dark web UI opens in your browser
@@ -130,15 +152,22 @@ YTDownloader for macOS (Intel + Apple Silicon)
 https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
 
-hdiutil create -volname "YTDownloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
+hdiutil create -volname "YTDownloader ${ARCH_LABEL}" -srcfolder "$STAGE" -ov -format UDZO "$DMG_ARCH" >/dev/null
+# Also keep a classic filename for backwards compatibility
+cp "$DMG_ARCH" "$DMG_GENERIC"
 rm -rf "$STAGE"
 
-cp "$DMG" "$RELEASES/YouTube-Downloader-macOS.dmg" 2>/dev/null || true
+mkdir -p "$RELEASES"
+cp "$DMG_ARCH" "$RELEASES/" 2>/dev/null || true
+cp "$DMG_GENERIC" "$RELEASES/YouTube-Downloader-macOS.dmg" 2>/dev/null || true
 echo "$VERSION" > "$RELEASES/VERSION.txt"
+echo "$ARCH_LABEL" > "$RELEASES/ARCH.txt"
 
 xattr -cr "$APP" 2>/dev/null || true
 
 echo
-echo "✅ App:  $APP"
-echo "✅ DMG:  $DMG"
-ls -lh "$APP" "$DMG"
+echo "✅ App:   $APP"
+echo "✅ DMG:   $DMG_ARCH"
+echo "✅ Also:  $DMG_GENERIC"
+echo "   Arch:  $ARCH_FRIENDLY"
+ls -lh "$APP" "$DMG_ARCH" "$DMG_GENERIC"
