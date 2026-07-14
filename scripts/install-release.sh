@@ -5,19 +5,24 @@
 # Usage (Intel or Apple Silicon — auto-detected):
 #   curl -fsSL https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh | bash
 #
+# If raw.githubusercontent.com serves a cached old script, bust the cache:
+#   curl -fsSL "https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh?$(date +%s)" | bash
+#
 set -euo pipefail
 export PATH="/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 REPO="Shahzaibzah00r/YouTube-Downloader"
 DEST="/Applications/YTDownloader.app"
 TMPDIR="${TMPDIR:-/tmp}/ytdownloader-install-$$"
-mkdir -p "$TMPDIR"
-MOUNT=""
+MNT="$TMPDIR/mnt"
+mkdir -p "$TMPDIR" "$MNT"
+MOUNTED=0
+
 cleanup() {
-  rm -rf "$TMPDIR"
-  if [[ -n "${MOUNT:-}" ]]; then
-    hdiutil detach "$MOUNT" >/dev/null 2>&1 || true
+  if [[ "$MOUNTED" -eq 1 ]]; then
+    hdiutil detach "$MNT" -force >/dev/null 2>&1 || true
   fi
+  rm -rf "$TMPDIR"
 }
 trap cleanup EXIT
 
@@ -27,7 +32,7 @@ case "$ARCH" in
   *)             LABEL="Intel" ;;
 esac
 
-echo "==> YTDownloader installer ($LABEL / $ARCH)"
+echo "==> YTDownloader installer ($LABEL / $ARCH) [script 2026-07-14b]"
 echo "    Fetching latest release…"
 
 API="https://api.github.com/repos/${REPO}/releases/latest"
@@ -59,23 +64,33 @@ echo "==> Downloading $TAG ($LABEL)…"
 # curl does NOT set com.apple.quarantine — Gatekeeper stays quiet
 curl -fL --progress-bar -o "$DMG" "$ASSET_URL"
 
+# Detach leftover YTDownloader volumes from earlier failed installs
+echo "==> Cleaning old mounts (if any)…"
+shopt -s nullglob
+for v in /Volumes/YTDownloader*; do
+  echo "    Ejecting $v"
+  hdiutil detach "$v" -force >/dev/null 2>&1 || true
+done
+shopt -u nullglob
+
 echo "==> Mounting…"
-# Volume names can contain spaces (e.g. "/Volumes/YTDownloader Intel") — never use awk $NF
+# Fixed mountpoint — ignores spaced volume names like "YTDownloader Intel"
 set +e
-ATTACH_OUT="$(hdiutil attach -nobrowse -readonly "$DMG" 2>&1)"
+ATTACH_OUT="$(hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG" 2>&1)"
 ATTACH_RC=$?
 set -e
-MOUNT="$(printf '%s\n' "$ATTACH_OUT" | sed -n 's|.*\(/Volumes/.*\)|\1|p' | tail -1)"
-if [[ "$ATTACH_RC" -ne 0 || -z "$MOUNT" || ! -d "$MOUNT" ]]; then
-  echo "ERROR: Could not mount DMG"
+if [[ "$ATTACH_RC" -ne 0 || ! -d "$MNT" ]]; then
+  echo "ERROR: Could not mount DMG (exit $ATTACH_RC)"
   printf '%s\n' "$ATTACH_OUT" | sed 's/^/    /'
   exit 1
 fi
-echo "    Mounted: $MOUNT"
+MOUNTED=1
+echo "    Mounted at: $MNT"
 
-SRC="$(find "$MOUNT" -maxdepth 1 -name "*.app" -print -quit)"
+SRC="$(find "$MNT" -maxdepth 1 -name "*.app" -print -quit)"
 if [[ -z "$SRC" || ! -d "$SRC" ]]; then
   echo "ERROR: No .app in DMG"
+  ls -la "$MNT" | sed 's/^/    /' || true
   exit 1
 fi
 
@@ -106,8 +121,8 @@ xattr -d com.apple.quarantine "$DEST" 2>/dev/null || true
 codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 
-hdiutil detach "$MOUNT" >/dev/null 2>&1 || true
-MOUNT=""
+hdiutil detach "$MNT" -force >/dev/null 2>&1 || true
+MOUNTED=0
 
 echo "==> Opening YTDownloader $TAG"
 open "$DEST"

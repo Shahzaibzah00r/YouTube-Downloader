@@ -32,7 +32,7 @@ Runs in a **native Mac window** (not a browser tab) with dark & light themes.
 **Recommended — one command, no Gatekeeper quarantine:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh | bash
+curl -fsSL "https://raw.githubusercontent.com/Shahzaibzah00r/YouTube-Downloader/main/scripts/install-release.sh?$(date +%s)" | bash
 ```
 
 Detects Intel vs Apple Silicon, downloads the matching DMG with **curl** (not the browser), installs to `/Applications`, clears quarantine, and opens. No “Apple could not verify…” dialog.
