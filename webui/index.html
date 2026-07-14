@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,40 +11,81 @@
     <header class="header">
       <div>
         <h1>YTDownloader</h1>
-        <p class="sub">Paste a YouTube link · pick quality · download</p>
+        <p class="sub">YouTube, playlists, and any direct file URL</p>
       </div>
-      <div class="pill" id="archPill">macOS</div>
+      <div class="header-actions">
+        <button type="button" class="btn ghost" id="themeBtn" title="Toggle theme">Light</button>
+        <div class="pill" id="archPill">macOS</div>
+      </div>
     </header>
 
     <section class="card">
-      <label for="url">Video or playlist URL</label>
-      <div class="row">
-        <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false" />
-        <button type="button" class="btn ghost" id="pasteBtn">Paste</button>
+      <div class="mode-row" role="tablist">
+        <button type="button" class="mode-btn active" data-mode="single" id="modeSingle">Single URL</button>
+        <button type="button" class="mode-btn" data-mode="batch" id="modeBatch">Batch URLs</button>
+      </div>
+
+      <div id="singleBox">
+        <label for="url">URL (YouTube or any file link)</label>
+        <div class="row">
+          <input id="url" type="url" placeholder="https://…" autocomplete="off" spellcheck="false" />
+          <button type="button" class="btn ghost" id="pasteBtn">Paste</button>
+          <button type="button" class="btn ghost" id="previewBtn">Preview</button>
+        </div>
+      </div>
+
+      <div id="batchBox" class="hidden">
+        <label for="batch">URLs (one per line)</label>
+        <textarea id="batch" rows="6" placeholder="https://youtube.com/watch?v=…&#10;https://example.com/file.zip&#10;…"></textarea>
+        <p class="hint" id="batchCount">0 URLs</p>
+      </div>
+
+      <div class="preview hidden" id="previewCard">
+        <img id="previewThumb" alt="" />
+        <div class="preview-meta">
+          <strong id="previewTitle">—</strong>
+          <span id="previewSub" class="muted">—</span>
+        </div>
+      </div>
+
+      <div class="media-block">
+        <label>Download as (YouTube)</label>
+        <div class="check-row">
+          <label class="check-item" for="optVideo">
+            <input type="checkbox" id="optVideo" checked />
+            <span>Video</span>
+          </label>
+          <label class="check-item" for="optAudio">
+            <input type="checkbox" id="optAudio" />
+            <span>Audio (MP3)</span>
+          </label>
+        </div>
+        <p class="hint" id="mediaHint">Video selected — check both to save video + separate MP3</p>
       </div>
 
       <div class="grid2">
-        <div>
-          <label for="quality">Quality</label>
-          <select id="quality">
-            <option value="best">Best available</option>
-            <option value="1080">1080p MP4</option>
-            <option value="720">720p MP4</option>
-            <option value="480">480p MP4</option>
-            <option value="audio">Audio only (MP3)</option>
-          </select>
+        <div id="qualityBox">
+          <label for="quality">Video quality</label>
+          <div class="select-wrap">
+            <select id="quality">
+              <option value="best">Best available</option>
+              <option value="1080">1080p MP4</option>
+              <option value="720">720p MP4</option>
+              <option value="480">480p MP4</option>
+            </select>
+          </div>
         </div>
         <div>
           <label for="outdir">Save folder</label>
           <div class="row">
             <input id="outdir" type="text" />
-            <button type="button" class="btn ghost" id="folderBtn" title="Use Downloads">Downloads</button>
+            <button type="button" class="btn ghost" id="folderBtn">Downloads</button>
           </div>
         </div>
       </div>
 
       <div class="actions">
-        <button type="button" class="btn primary" id="downloadBtn">Download</button>
+        <button type="button" class="btn primary" id="downloadBtn">Start downloading</button>
         <button type="button" class="btn danger" id="cancelBtn" disabled>Cancel</button>
         <button type="button" class="btn ghost" id="openBtn">Open folder</button>
         <button type="button" class="btn ghost" id="fixBtn">Fix tools</button>
@@ -52,6 +93,7 @@
 
       <p class="status" id="status">Starting…</p>
       <div class="progress"><div class="bar" id="bar"></div></div>
+      <p class="hint" id="queueHint"></p>
     </section>
 
     <section class="card log-card">

@@ -5,7 +5,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Shahzaibzah00r/YouTube-Downloader?label=download)](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases/latest)
 
 Free macOS YouTube downloader — **Intel** and **Apple Silicon**.  
-Dark web UI (HTML/CSS) in your browser — reliable and easy to use.
+Native window with dark / light web UI — reliable and easy to use.
 
 **Repo:** https://github.com/Shahzaibzah00r/YouTube-Downloader
 
@@ -38,15 +38,17 @@ Or:
 Not sure? Apple menu → **About This Mac** (Chip = Intel or M1/M2/M3/M4).
 
 3. Drag **YTDownloader** into **Applications**
-4. Open it — the dark web UI launches in your browser
+4. Open it — YTDownloader launches in a native Mac window
 5. If tools are missing, click **Fix tools** ([Homebrew](https://brew.sh))
 
 ## Features
 
-- Dark web UI (default)
-- Paste link → quality → Download
+- Native Mac app window (pywebview) with dark / light theme
+- Single + batch URL queue (YouTube, playlists, and direct file links)
+- Preview (title / thumbnail) before download
+- Video, audio (MP3), or both — video checked by default
+- Quality: best / 1080p / 720p / 480p
 - Live progress + activity log
-- Best / 1080p / 720p / 480p / Audio MP3
 - Intel (`x86_64`) + Apple Silicon (`arm64`)
 - **Fix tools** installs `yt-dlp` + `ffmpeg`
 
@@ -71,8 +73,8 @@ Not sure? Apple menu → **About This Mac** (Chip = Intel or M1/M2/M3/M4).
 | Tag `v*` | Build DMG → GitHub Release |
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.6.0
+git push origin v1.6.0
 ```
 
 ## Credits
