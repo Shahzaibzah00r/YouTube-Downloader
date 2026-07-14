@@ -21,7 +21,7 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.7.5"
+  VERSION="1.7.6"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
@@ -59,39 +59,58 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
 RES="$HERE/Resources"
+LOGDIR="$HOME/Library/Logs/YTDownloader"
+LOG="$LOGDIR/launch.log"
+mkdir -p "$LOGDIR"
 cd "$RES"
 
+exec >>"$LOG" 2>&1
+echo "---- $(date) launch $(uname -m) ----"
+
 # Clear Gatekeeper quarantine on every launch (unsigned OSS — no paid Apple cert)
-# This is what removes the “blocked / open in Settings” loop after install or update.
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
+# Prefer Homebrew Python on Apple Silicon (arm64) over /usr/local (often Rosetta)
 PYTHON=""
-for candidate in /usr/local/bin/python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+ARCH="$(uname -m)"
+if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+  CANDIDATES=(/opt/homebrew/bin/python3 /usr/bin/python3 /usr/local/bin/python3)
+else
+  CANDIDATES=(/usr/local/bin/python3 /usr/bin/python3 /opt/homebrew/bin/python3)
+fi
+for candidate in "${CANDIDATES[@]}"; do
   if [[ -x "$candidate" ]]; then PYTHON="$candidate"; break; fi
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 is required." buttons {"OK"} default button 1 with title "YTDownloader"'
+  osascript -e 'display dialog "Python 3 is required.\n\nInstall from python.org or: brew install python" buttons {"OK"} default button 1 with title "YTDownloader"'
   exit 1
 fi
+echo "python=$PYTHON"
 
 # App-local venv for pywebview (native Mac window, not browser)
 VENV="$HOME/Library/Application Support/YTDownloader/venv"
 if [[ ! -x "$VENV/bin/python" ]]; then
   osascript -e 'display notification "Setting up YTDownloader (first launch)…" with title "YTDownloader"'
   mkdir -p "$(dirname "$VENV")"
-  "$PYTHON" -m venv "$VENV"
-  "$VENV/bin/pip" install -U pip >/dev/null
-  "$VENV/bin/pip" install pywebview >/dev/null
+  if ! "$PYTHON" -m venv "$VENV"; then
+    osascript -e 'display dialog "Could not create the app environment.\n\nTry: brew install python\nThen reopen YTDownloader." buttons {"OK"} default button 1 with title "YTDownloader"'
+    exit 1
+  fi
+  "$VENV/bin/pip" install -U pip || true
+  if ! "$VENV/bin/pip" install pywebview; then
+    osascript -e 'display dialog "Could not install pywebview (needed for the Mac window).\n\nCheck your internet connection and reopen the app.\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"'
+    rm -rf "$VENV"
+    exit 1
+  fi
 fi
 
+# Do NOT block the window on brew install — that made first launch look "broken"
+# (brew can take minutes). Open the app; user can click Fix tools inside.
 if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
-  if command -v brew >/dev/null 2>&1; then
-    osascript -e 'display notification "Installing yt-dlp and ffmpeg…" with title "YTDownloader"'
-    brew install yt-dlp ffmpeg || true
-  fi
+  osascript -e 'display notification "Open the app → click Fix tools to install yt-dlp & ffmpeg" with title "YTDownloader"' || true
 fi
 
 exec "$VENV/bin/python" yt_downloader.py

@@ -30,7 +30,7 @@ HISTORY_MAX = 20
 GITHUB_REPO = "Shahzaibzah00r/YouTube-Downloader"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.7.5"
+APP_VERSION_FALLBACK = "1.7.6"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
