@@ -122,7 +122,7 @@ YouTube Downloader for macOS (Intel + Apple Silicon)
 3. If macOS blocks it: Right-click → Open → Open
 4. On first use, click "Fix tools" if prompted (needs Homebrew)
 
-https://github.com/shahzaibzah00r/Youtube-Downloader
+https://github.com/Shahzaibzah00r/YouTube-Downloader
 EOF
 
 hdiutil create -volname "YouTube Downloader" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null

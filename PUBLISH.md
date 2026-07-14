@@ -1,4 +1,4 @@
-# Publish checklist for https://github.com/shahzaibzah00r/Youtube-Downloader
+# Publish checklist for https://github.com/Shahzaibzah00r/YouTube-Downloader
 
 ## Create / push
 
@@ -7,7 +7,7 @@ cd "/Users/shahz/Documents/Shahzaib/Youtube-Downloader"
 
 git remote rename origin upstream 2>/dev/null || true
 git remote remove origin 2>/dev/null || true
-git remote add origin https://github.com/shahzaibzah00r/Youtube-Downloader.git
+git remote add origin https://github.com/Shahzaibzah00r/YouTube-Downloader.git
 
 git add -A
 git commit -m "Release dual-arch installable YouTube Downloader"

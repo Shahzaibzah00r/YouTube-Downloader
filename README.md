@@ -2,13 +2,13 @@
 
 Easy YouTube downloader for **Intel** and **Apple Silicon** Macs.
 
-Repo: https://github.com/shahzaibzah00r/Youtube-Downloader
+Repo: https://github.com/Shahzaibzah00r/YouTube-Downloader
 
 ## Install (recommended)
 
 ### Option A — DMG (after a release is published)
 
-1. Download `YouTube-Downloader-macOS.dmg` from [Releases](https://github.com/shahzaibzah00r/Youtube-Downloader/releases)
+1. Download `YouTube-Downloader-macOS.dmg` from [Releases](https://github.com/Shahzaibzah00r/YouTube-Downloader/releases)
 2. Open the DMG
 3. Drag **YouTube Downloader** into **Applications**
 4. Open the app (Right-click → Open the first time if macOS blocks it)
@@ -17,7 +17,7 @@ Repo: https://github.com/shahzaibzah00r/Youtube-Downloader
 ### Option B — one command from source
 
 ```bash
-git clone https://github.com/shahzaibzah00r/Youtube-Downloader.git
+git clone https://github.com/Shahzaibzah00r/YouTube-Downloader.git
 cd Youtube-Downloader
 ./install.sh
 ```
