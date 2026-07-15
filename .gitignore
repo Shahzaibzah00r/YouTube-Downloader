@@ -24,3 +24,4 @@ releases/*.dmg
 !releases/README.md
 !releases/VERSION.txt
 !releases/ARCH.txt
+docs/images/linkedin-launch-cover.png

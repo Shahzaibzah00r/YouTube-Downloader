@@ -30,7 +30,7 @@ HISTORY_MAX = 20
 GITHUB_REPO = "Shahzaibzah00r/YouTube-Downloader"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.7.7"
+APP_VERSION_FALLBACK = "1.8.0"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
@@ -2230,44 +2230,66 @@ def start_server() -> tuple[ThreadingHTTPServer, str]:
 
 
 def open_native_window(url: str) -> bool:
-    """Open UI in a real macOS app window (not Safari/Chrome)."""
+    """Open UI in a real macOS window via pywebview (Cocoa on Darwin).
+
+    Follows official usage:
+      https://pywebview.flowrl.com/guide/usage
+      https://pywebview.flowrl.com/api/
+    macOS deps (PyObjC / WebKit) are documented at:
+      https://pywebview.flowrl.com/guide/installation.html
+    """
     try:
         import webview  # type: ignore
     except ImportError:
         return False
 
-    # Avoid tkinter here — creating a Tk root before Cocoa can hang and leave
-    # only a Dock icon with no window (especially on newer macOS / M-series).
     width, height = 1280, 860
     try:
         from AppKit import NSScreen  # type: ignore
 
-        frame = NSScreen.mainScreen().frame()
-        width = max(1100, int(frame.size.width * 0.92))
-        height = max(740, int(frame.size.height * 0.90))
+        frame = NSScreen.mainScreen().visibleFrame()
+        width = max(1100, int(frame.size.width * 0.9))
+        height = max(740, int(frame.size.height * 0.88))
     except Exception:
         pass
 
-    window_kwargs = dict(
+    # Create then start — window is shown when the GUI loop starts (official API).
+    # Maximize after shown: maximizing before first_show has raced on some Macs.
+    window = webview.create_window(
         title="YTDownloader",
         url=url,
         width=width,
         height=height,
         min_size=(900, 640),
-        maximized=True,
+        maximized=False,
+        focus=True,
+        hidden=False,
         background_color="#0b0d10",
     )
+
+    def _on_shown() -> None:
+        try:
+            window.maximize()
+        except Exception:
+            pass
+
     try:
-        webview.create_window(**window_kwargs, focus=True)
-    except TypeError:
-        webview.create_window(**window_kwargs)
-    webview.start(gui="cocoa")
+        window.events.shown += _on_shown
+    except Exception:
+        pass
+
+    # On macOS the default renderer is Cocoa; forcing gui='cocoa' is supported
+    # by pywebview.guilib (see GUIType Literal including 'cocoa').
+    if platform.system() == "Darwin":
+        webview.start(gui="cocoa")
+    else:
+        webview.start()
     return True
 
 
 def main() -> None:
     ensure_path()
-    # Quarantine only on launch — full ad-hoc codesign is slow and delays the window
+    # Quarantine only — do not ad-hoc codesign on every launch (slow / blocks UI)
     bundle = detect_app_bundle()
     if bundle:
         clear_quarantine(bundle)
@@ -2280,7 +2302,7 @@ def main() -> None:
         import webbrowser
 
         print("pywebview not installed — opening browser fallback.")
-        print("For a real app window:  pip install pywebview")
+        print("For a real app window:  pip install -r requirements.txt")
         print("Or run:  ./setup.sh")
         webbrowser.open(url)
         try:

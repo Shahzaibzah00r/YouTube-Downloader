@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version (e.g. 1.7.7)"
+        description: "Version (e.g. 1.8.0)"
         required: true
-        default: "1.7.7"
+        default: "1.8.0"
 
 permissions:
   contents: write

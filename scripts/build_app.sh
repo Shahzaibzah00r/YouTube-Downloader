@@ -21,7 +21,7 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.7.7"
+  VERSION="1.8.0"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
@@ -46,69 +46,80 @@ if [[ -f "$ICON_SRC" ]]; then
   rm -rf "$DIST/icon.iconset"
 fi
 
-# Bundle web UI + server
+# Bundle app sources + official macOS pywebview requirements
 cp "$ROOT/yt_downloader.py" "$APP/Contents/Resources/yt_downloader.py"
+cp "$ROOT/mac_entry.py" "$APP/Contents/Resources/mac_entry.py"
+cp "$ROOT/requirements.txt" "$APP/Contents/Resources/requirements.txt"
 cp "$ROOT/webui/index.html" "$ROOT/webui/styles.css" "$ROOT/webui/app.js" "$APP/Contents/Resources/webui/"
-# Version file for in-app update checks
 printf '%s\n' "$VERSION" > "$APP/Contents/Resources/VERSION"
 printf '%s\n' "$VERSION" > "$ROOT/VERSION"
 
+# Thin MacOS executable: prepare venv with official deps, then exec Python entry.
+# Docs: https://pywebview.flowrl.com/guide/installation.html (macOS PyObjC packages)
+# No osascript notifications (show up as Script Editor). No brew/codesign before UI.
 cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
-# Fast launcher: never use osascript notifications (macOS shows those as "Script Editor").
-# Never block on brew/codesign — open the UI as soon as possible.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
 RES="$HERE/Resources"
 LOGDIR="$HOME/Library/Logs/YTDownloader"
 LOG="$LOGDIR/launch.log"
+VENV="$HOME/Library/Application Support/YTDownloader/venv"
+MARKER="$VENV/.ytd_deps_ok_v2"
+
 mkdir -p "$LOGDIR"
-{
-  echo "---- $(date) launch $(uname -m) ----"
-} >>"$LOG"
+echo "---- $(date) launch arch=$(uname -m) ----" >>"$LOG"
 
-cd "$RES"
-
-# Quarantine only (skip codesign every launch — it is slow and can leave Dock icon with no window)
+cd "$RES" || exit 1
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
-# Prefer Homebrew Python on Apple Silicon; on Intel prefer /usr/local then system
-PYTHON=""
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
   CANDIDATES=(/opt/homebrew/bin/python3 /usr/bin/python3 /usr/local/bin/python3)
 else
   CANDIDATES=(/usr/local/bin/python3 /usr/bin/python3 /opt/homebrew/bin/python3)
 fi
+
+PYTHON=""
 for candidate in "${CANDIDATES[@]}"; do
   if [[ -x "$candidate" ]]; then PYTHON="$candidate"; break; fi
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 is required.\n\nInstall from python.org or run:\n  brew install python" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
-  echo "ERROR: no python3" >>"$LOG"
+  echo "ERROR: python3 not found on PATH" >>"$LOG"
+  open -a TextEdit "$LOG" 2>/dev/null || true
   exit 1
 fi
 echo "python=$PYTHON" >>"$LOG"
 
-VENV="$HOME/Library/Application Support/YTDownloader/venv"
-if [[ ! -x "$VENV/bin/python" ]]; then
+if [[ ! -x "$VENV/bin/python" || ! -f "$MARKER" ]]; then
+  echo "Installing official pywebview macOS dependencies…" >>"$LOG"
+  rm -rf "$VENV"
   mkdir -p "$(dirname "$VENV")"
   if ! "$PYTHON" -m venv "$VENV" >>"$LOG" 2>&1; then
-    osascript -e 'display dialog "Could not create the app environment.\n\nTry:\n  brew install python\nThen reopen YTDownloader.\n\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
+    echo "ERROR: venv failed" >>"$LOG"
+    open -a TextEdit "$LOG" 2>/dev/null || true
     exit 1
   fi
-  "$VENV/bin/pip" install -U pip >>"$LOG" 2>&1 || true
-  if ! "$VENV/bin/pip" install pywebview >>"$LOG" 2>&1; then
-    osascript -e 'display dialog "Could not install pywebview (needed for the window).\n\nCheck internet, then reopen.\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
+  "$VENV/bin/pip" install -U pip setuptools wheel >>"$LOG" 2>&1 || true
+  if ! "$VENV/bin/pip" install -r "$RES/requirements.txt" >>"$LOG" 2>&1; then
+    echo "ERROR: pip install -r requirements.txt failed" >>"$LOG"
     rm -rf "$VENV"
+    open -a TextEdit "$LOG" 2>/dev/null || true
     exit 1
   fi
+  if ! "$VENV/bin/python" -c "import webview, AppKit, WebKit" >>"$LOG" 2>&1; then
+    echo "ERROR: Cocoa/WebKit import failed" >>"$LOG"
+    rm -rf "$VENV"
+    open -a TextEdit "$LOG" 2>/dev/null || true
+    exit 1
+  fi
+  printf 'ok\n' > "$MARKER"
 fi
 
-# Tools (yt-dlp/ffmpeg) are installed from inside the app via Fix tools — never here.
-exec "$VENV/bin/python" yt_downloader.py >>"$LOG" 2>&1
+# Do not redirect stdio — Cocoa GUI apps can misbehave when stdout is a file.
+exec "$VENV/bin/python" "$RES/mac_entry.py"
 LAUNCH
 chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
 
@@ -193,8 +204,6 @@ if [[ ! -d "$SRC" ]]; then
   exit 1
 fi
 
-osascript -e 'display notification "Installing YTDownloader…" with title "YTDownloader"' || true
-
 # Close any already-running copy first (process name is often Python, not YTDownloader)
 osascript >/dev/null 2>&1 <<'EOF' || true
 tell application "System Events"
@@ -232,7 +241,6 @@ codesign --force --deep --sign - "$DEST" 2>/dev/null || true
 xattr -cr "$DEST" 2>/dev/null || true
 
 open "$DEST"
-osascript -e 'display notification "YTDownloader is ready" with title "YTDownloader"' || true
 INSTALL
 chmod +x "$STAGE/Install & Open.command"
 

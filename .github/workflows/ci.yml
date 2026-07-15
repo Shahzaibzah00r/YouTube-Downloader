@@ -28,7 +28,9 @@ jobs:
           bash -n scripts/install-release.sh
 
       - name: Syntax-check Python
-        run: python3 -m py_compile yt_downloader.py
+        run: |
+          python3 -m py_compile yt_downloader.py
+          python3 -m py_compile mac_entry.py
 
       - name: Required project files
         run: |
@@ -36,6 +38,8 @@ jobs:
           test -f LICENSE
           test -f VERSION
           test -f yt_downloader.py
+          test -f mac_entry.py
+          test -f requirements.txt
           test -f assets/AppIcon.png
           test -f webui/index.html
           test -f webui/styles.css

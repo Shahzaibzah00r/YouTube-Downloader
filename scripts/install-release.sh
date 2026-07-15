@@ -107,10 +107,15 @@ end tell
 EOF
 pkill -9 -f "YTDownloader.app/Contents" 2>/dev/null || true
 pkill -9 -f "Contents/Resources/yt_downloader.py" 2>/dev/null || true
+pkill -9 -f "Contents/Resources/mac_entry.py" 2>/dev/null || true
 for p in $(seq 8765 8784); do
   lsof -tiTCP:"$p" -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
 done
 sleep 0.4
+
+# Force a fresh venv so old incomplete installs (missing PyObjC/WebKit) cannot stick
+echo "==> Resetting app venv (official pywebview macOS deps on next open)…"
+rm -rf "$HOME/Library/Application Support/YTDownloader/venv"
 
 echo "==> Installing to $DEST"
 rm -rf "$DEST"
