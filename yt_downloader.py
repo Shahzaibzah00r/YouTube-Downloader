@@ -34,7 +34,7 @@ APP_SUPPORT = Path.home() / "Library" / "Application Support" / "YTDownloader"
 APP_VENV = APP_SUPPORT / "venv"
 APP_BIN = APP_SUPPORT / "bin"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.8.1"
+APP_VERSION_FALLBACK = "1.8.2"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
@@ -1942,39 +1942,130 @@ def _link_tool(src: Path, dest: Path) -> None:
         dest.chmod(0o755)
 
 
-def _install_via_arm_brew() -> bool:
-    """A — native Apple Silicon Homebrew (/opt/homebrew), forced arch -arm64."""
-    brew = Path("/opt/homebrew/bin/brew")
-    if not brew.is_file():
-        STATE.emit({"type": "log", "line": "A) No /opt/homebrew/bin/brew — skip", "cls": "muted"})
+def _download_file(url: str, dest: Path, timeout: int = 180) -> bool:
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(url, headers={"User-Agent": _ua()})
+        with urllib.request.urlopen(req, timeout=timeout) as resp, open(dest, "wb") as fh:
+            shutil.copyfileobj(resp, fh)
+        return dest.is_file() and dest.stat().st_size > 0
+    except Exception as exc:  # noqa: BLE001
+        STATE.emit({"type": "log", "line": f"Download failed ({url}): {exc}", "cls": "err"})
         return False
-    STATE.emit({"type": "log", "line": "A) Trying native Homebrew (arch -arm64)…", "cls": "muted"})
-    code = _stream_cmd(["arch", "-arm64", str(brew), "install", "yt-dlp", "ffmpeg"])
-    if code != 0:
-        _stream_cmd(["arch", "-arm64", str(brew), "upgrade", "yt-dlp", "ffmpeg"])
+
+
+def _brew_cmd(*args: str) -> list[str]:
+    """Pick the right brew + arch wrapper for this Mac."""
+    arm_brew = Path("/opt/homebrew/bin/brew")
+    intel_brew = Path("/usr/local/bin/brew")
+    if is_apple_silicon_hardware() and arm_brew.is_file():
+        return ["arch", "-arm64", str(arm_brew), *args]
+    if intel_brew.is_file():
+        if is_apple_silicon_hardware():
+            return ["arch", "-x86_64", str(intel_brew), *args]
+        return [str(intel_brew), *args]
+    which = shutil.which("brew")
+    if which:
+        if is_apple_silicon_hardware() and platform.machine().lower() in ("x86_64", "amd64"):
+            return ["arch", "-arm64", which, *args]
+        return [which, *args]
+    return []
+
+
+def _try_discover_existing() -> bool:
+    """1 — find tools already installed anywhere common."""
+    STATE.emit({"type": "log", "line": "1) Scanning for existing yt-dlp / ffmpeg…", "cls": "muted"})
+    ensure_path()
+    yt = resolve_tool("yt-dlp")
+    ff = resolve_tool("ffmpeg")
+    if yt:
+        STATE.emit({"type": "log", "line": f"   yt-dlp: {yt}", "cls": "ok"})
+    if ff:
+        STATE.emit({"type": "log", "line": f"   ffmpeg: {ff}", "cls": "ok"})
     return _tools_ready()
 
 
-def _install_via_intel_brew() -> bool:
-    """B — Intel Homebrew (/usr/local) under Rosetta, if present."""
+def _try_arm_brew() -> bool:
+    """2 — Homebrew ARM (/opt/homebrew)."""
+    if not Path("/opt/homebrew/bin/brew").is_file():
+        STATE.emit({"type": "log", "line": "2) No ARM Homebrew — skip", "cls": "muted"})
+        return False
+    STATE.emit({"type": "log", "line": "2) Homebrew ARM install…", "cls": "muted"})
+    cmd = _brew_cmd("install", "yt-dlp", "ffmpeg")
+    if not cmd:
+        return False
+    if _stream_cmd(cmd) != 0:
+        _stream_cmd(_brew_cmd("upgrade", "yt-dlp", "ffmpeg"))
+    return _tools_ready()
+
+
+def _try_intel_brew() -> bool:
+    """3 — Homebrew Intel (/usr/local)."""
+    if not Path("/usr/local/bin/brew").is_file():
+        STATE.emit({"type": "log", "line": "3) No Intel Homebrew — skip", "cls": "muted"})
+        return False
+    STATE.emit({"type": "log", "line": "3) Homebrew Intel install…", "cls": "muted"})
+    # Force intel brew path even on Apple Silicon
     brew = Path("/usr/local/bin/brew")
-    if not brew.is_file():
-        STATE.emit({"type": "log", "line": "B) No /usr/local/bin/brew — skip", "cls": "muted"})
-        return False
-    STATE.emit({"type": "log", "line": "B) Trying Intel Homebrew (arch -x86_64)…", "cls": "muted"})
-    code = _stream_cmd(["arch", "-x86_64", str(brew), "install", "yt-dlp", "ffmpeg"])
-    if code != 0:
-        _stream_cmd(["arch", "-x86_64", str(brew), "upgrade", "yt-dlp", "ffmpeg"])
+    prefix = ["arch", "-x86_64"] if is_apple_silicon_hardware() else []
+    if _stream_cmd([*prefix, str(brew), "install", "yt-dlp", "ffmpeg"]) != 0:
+        _stream_cmd([*prefix, str(brew), "upgrade", "yt-dlp", "ffmpeg"])
     return _tools_ready()
 
 
-def _install_via_pip_imageio() -> bool:
-    """C — no brew required: pip yt-dlp + imageio-ffmpeg (ships ffmpeg)."""
-    STATE.emit({"type": "log", "line": "C) Trying pip yt-dlp + bundled ffmpeg…", "cls": "muted"})
+def _try_path_brew() -> bool:
+    """4 — whatever `brew` is on PATH (with arch fix), if not already tried."""
+    which = shutil.which("brew")
+    if not which:
+        STATE.emit({"type": "log", "line": "4) No brew on PATH — skip", "cls": "muted"})
+        return False
+    known = set()
+    for cand in ("/opt/homebrew/bin/brew", "/usr/local/bin/brew"):
+        cp = Path(cand)
+        if cp.is_file():
+            known.add(str(cp.resolve()))
+    if str(Path(which).resolve()) in known:
+        STATE.emit({"type": "log", "line": "4) PATH brew already covered — skip", "cls": "muted"})
+        return False
+    STATE.emit({"type": "log", "line": "4) Homebrew (PATH) install…", "cls": "muted"})
+    cmd = _brew_cmd("install", "yt-dlp", "ffmpeg")
+    if not cmd:
+        return False
+    if _stream_cmd(cmd) != 0:
+        up = _brew_cmd("upgrade", "yt-dlp", "ffmpeg")
+        if up:
+            _stream_cmd(up)
+    return _tools_ready()
+
+
+def _try_macports() -> bool:
+    """5 — MacPorts if installed."""
+    port = shutil.which("port") or (
+        "/opt/local/bin/port" if Path("/opt/local/bin/port").is_file() else None
+    )
+    if not port:
+        STATE.emit({"type": "log", "line": "5) No MacPorts — skip", "cls": "muted"})
+        return False
+    STATE.emit({"type": "log", "line": "5) MacPorts install…", "cls": "muted"})
+    # May need admin; try without sudo first
+    code = _stream_cmd([port, "install", "yt-dlp", "ffmpeg"])
+    if code != 0:
+        _stream_cmd(["sudo", "-n", port, "install", "yt-dlp", "ffmpeg"])
+    ensure_path()
+    # MacPorts bins
+    for name in ("yt-dlp", "ffmpeg"):
+        p = Path(f"/opt/local/bin/{name}")
+        if p.is_file() and not resolve_tool(name):
+            _link_tool(p, APP_BIN / name)
+    return _tools_ready()
+
+
+def _try_pip_imageio() -> bool:
+    """6 — pip yt-dlp + imageio-ffmpeg (bundles ffmpeg)."""
+    STATE.emit({"type": "log", "line": "6) pip install yt-dlp + imageio-ffmpeg…", "cls": "muted"})
     py = sys.executable
     if _stream_cmd([py, "-m", "pip", "install", "-U", "yt-dlp", "imageio-ffmpeg"]) != 0:
         return False
-    APP_BIN.mkdir(parents=True, exist_ok=True)
     for yt_src in (Path(py).parent / "yt-dlp", APP_VENV / "bin" / "yt-dlp"):
         if yt_src.is_file():
             _link_tool(yt_src, APP_BIN / "yt-dlp")
@@ -1982,46 +2073,114 @@ def _install_via_pip_imageio() -> bool:
     try:
         import imageio_ffmpeg  # type: ignore
 
-        ff = Path(imageio_ffmpeg.get_ffmpeg_exe())
-        _link_tool(ff, APP_BIN / "ffmpeg")
-        STATE.emit({"type": "log", "line": f"Bundled ffmpeg → {APP_BIN / 'ffmpeg'}", "cls": "ok"})
+        _link_tool(Path(imageio_ffmpeg.get_ffmpeg_exe()), APP_BIN / "ffmpeg")
     except Exception as exc:  # noqa: BLE001
-        STATE.emit({"type": "log", "line": f"imageio-ffmpeg failed: {exc}", "cls": "err"})
-        return False
+        STATE.emit({"type": "log", "line": f"imageio-ffmpeg: {exc}", "cls": "err"})
     ensure_path()
     return _tools_ready()
 
 
-def _install_via_ytdlp_binary() -> bool:
-    """D — official yt-dlp macOS binary + bundled ffmpeg if needed."""
-    STATE.emit({"type": "log", "line": "D) Trying official yt-dlp macOS binary…", "cls": "muted"})
-    APP_BIN.mkdir(parents=True, exist_ok=True)
+def _try_pip_static_ffmpeg() -> bool:
+    """7 — pip static-ffmpeg (alternate bundled ffmpeg) + yt-dlp."""
+    STATE.emit({"type": "log", "line": "7) pip install yt-dlp + static-ffmpeg…", "cls": "muted"})
+    py = sys.executable
+    _stream_cmd([py, "-m", "pip", "install", "-U", "yt-dlp", "static-ffmpeg"])
+    for yt_src in (Path(py).parent / "yt-dlp", APP_VENV / "bin" / "yt-dlp"):
+        if yt_src.is_file():
+            _link_tool(yt_src, APP_BIN / "yt-dlp")
+            break
+    try:
+        import static_ffmpeg  # type: ignore
+
+        # static_ffmpeg.add_paths() adds to PATH; also try get binary helpers
+        static_ffmpeg.add_paths()
+        ensure_path()
+        if not resolve_tool("ffmpeg"):
+            # Older API: run and locate
+            ff = shutil.which("ffmpeg")
+            if ff:
+                _link_tool(Path(ff), APP_BIN / "ffmpeg")
+    except Exception as exc:  # noqa: BLE001
+        STATE.emit({"type": "log", "line": f"static-ffmpeg: {exc}", "cls": "err"})
+    ensure_path()
+    return _tools_ready()
+
+
+def _try_ytdlp_macos_binary() -> bool:
+    """8 — official yt-dlp_macos universal binary."""
+    STATE.emit({"type": "log", "line": "8) Download yt-dlp_macos binary…", "cls": "muted"})
     dest = APP_BIN / "yt-dlp"
     url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": _ua()})
-        with urllib.request.urlopen(req, timeout=180) as resp, open(dest, "wb") as fh:
-            shutil.copyfileobj(resp, fh)
-        dest.chmod(0o755)
-        STATE.emit({"type": "log", "line": f"yt-dlp binary → {dest}", "cls": "ok"})
-    except Exception as exc:  # noqa: BLE001
-        STATE.emit({"type": "log", "line": f"yt-dlp download failed: {exc}", "cls": "err"})
+    if not _download_file(url, dest):
         return False
-    if not resolve_tool("ffmpeg"):
-        _stream_cmd([sys.executable, "-m", "pip", "install", "-U", "imageio-ffmpeg"])
-        try:
-            import imageio_ffmpeg  # type: ignore
-
-            _link_tool(Path(imageio_ffmpeg.get_ffmpeg_exe()), APP_BIN / "ffmpeg")
-        except Exception as exc:  # noqa: BLE001
-            STATE.emit({"type": "log", "line": f"ffmpeg still missing: {exc}", "cls": "err"})
+    dest.chmod(0o755)
     ensure_path()
-    return _tools_ready()
+    return bool(resolve_tool("yt-dlp"))
+
+
+def _try_ytdlp_zipimport() -> bool:
+    """9 — platform-independent yt-dlp (needs Python) into APP_BIN."""
+    STATE.emit({"type": "log", "line": "9) Download yt-dlp (Python zipimport)…", "cls": "muted"})
+    dest = APP_BIN / "yt-dlp"
+    url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
+    if not _download_file(url, dest):
+        return False
+    dest.chmod(0o755)
+    ensure_path()
+    return bool(resolve_tool("yt-dlp"))
+
+
+def _try_evermeet_ffmpeg() -> bool:
+    """10 — static ffmpeg from evermeet.cx (macOS)."""
+    if resolve_tool("ffmpeg"):
+        return True
+    STATE.emit({"type": "log", "line": "10) Download static ffmpeg (evermeet.cx)…", "cls": "muted"})
+    zip_path = APP_SUPPORT / "ffmpeg-evermeet.zip"
+    urls = (
+        "https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip",
+        "https://evermeet.cx/ffmpeg/ffmpeg-7.1.zip",
+        "https://evermeet.cx/ffmpeg/ffmpeg-7.0.2.zip",
+    )
+    ok = False
+    for url in urls:
+        if _download_file(url, zip_path, timeout=240):
+            ok = True
+            break
+    if not ok:
+        return False
+    try:
+        import zipfile
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names = zf.namelist()
+            member = next((n for n in names if n.rstrip("/").endswith("ffmpeg") and not n.endswith("/")), None)
+            if not member:
+                STATE.emit({"type": "log", "line": "ffmpeg not found inside zip", "cls": "err"})
+                return False
+            zf.extract(member, APP_SUPPORT)
+            extracted = APP_SUPPORT / member
+            _link_tool(extracted, APP_BIN / "ffmpeg")
+            probe = next((n for n in names if n.rstrip("/").endswith("ffprobe") and not n.endswith("/")), None)
+            if probe:
+                zf.extract(probe, APP_SUPPORT)
+                _link_tool(APP_SUPPORT / probe, APP_BIN / "ffprobe")
+        STATE.emit({"type": "log", "line": f"ffmpeg → {APP_BIN / 'ffmpeg'}", "cls": "ok"})
+    except Exception as exc:  # noqa: BLE001
+        STATE.emit({"type": "log", "line": f"evermeet extract failed: {exc}", "cls": "err"})
+        return False
+    finally:
+        try:
+            zip_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+    ensure_path()
+    return bool(resolve_tool("ffmpeg"))
 
 
 def run_fix_tools() -> None:
-    """Install yt-dlp + ffmpeg with cascading strategies (A→B→C→D)."""
+    """Install yt-dlp + ffmpeg with many cascading strategies until one works."""
     ensure_path()
+    APP_BIN.mkdir(parents=True, exist_ok=True)
     STATE.emit({"type": "status", "text": "Installing yt-dlp and ffmpeg…"})
     STATE.emit(
         {
@@ -2034,77 +2193,78 @@ def run_fix_tools() -> None:
         }
     )
 
-    if _tools_ready():
-        STATE.emit({"type": "log", "line": "Tools already available.", "cls": "ok"})
-        STATE.emit({"type": "status", "text": "Tools ready"})
-        notify_macos("YTDownloader", "Tools ready")
-        STATE.busy = False
-        STATE.emit({"type": "done"})
-        return
-
     strategies = (
-        ("A Homebrew ARM", _install_via_arm_brew),
-        ("B Homebrew Intel", _install_via_intel_brew),
-        ("C pip + bundled ffmpeg", _install_via_pip_imageio),
-        ("D yt-dlp binary", _install_via_ytdlp_binary),
+        ("1 existing tools", _try_discover_existing),
+        ("2 Homebrew ARM", _try_arm_brew),
+        ("3 Homebrew Intel", _try_intel_brew),
+        ("4 Homebrew PATH", _try_path_brew),
+        ("5 MacPorts", _try_macports),
+        ("6 pip + imageio-ffmpeg", _try_pip_imageio),
+        ("7 pip + static-ffmpeg", _try_pip_static_ffmpeg),
+        ("8 yt-dlp_macos binary", _try_ytdlp_macos_binary),
+        ("9 yt-dlp zipimport", _try_ytdlp_zipimport),
+        ("10 evermeet ffmpeg", _try_evermeet_ffmpeg),
     )
     for label, fn in strategies:
+        if _tools_ready():
+            break
         try:
-            if fn():
+            STATE.emit({"type": "status", "text": f"Fix tools · {label}…"})
+            fn()  # may install only one tool; cascade continues until both ready
+            if _tools_ready():
                 STATE.emit({"type": "log", "line": f"Success via {label}", "cls": "ok"})
-                STATE.emit({"type": "status", "text": "Tools ready"})
-                notify_macos("YTDownloader", "Tools installed")
-                STATE.busy = False
-                STATE.emit({"type": "done"})
-                return
+                break
+            STATE.emit({"type": "log", "line": f"{label} incomplete — next…", "cls": "muted"})
         except Exception as exc:  # noqa: BLE001
             STATE.emit({"type": "log", "line": f"{label} error: {exc}", "cls": "err"})
 
-    missing = [n for n in ("yt-dlp", "ffmpeg") if not resolve_tool(n)]
-    STATE.emit(
-        {
-            "type": "error",
-            "text": (
-                f"Still missing: {', '.join(missing) or 'unknown'}. "
-                "Install Homebrew from https://brew.sh then click Fix tools again."
-            ),
-        }
-    )
+    if _tools_ready():
+        STATE.emit({"type": "log", "line": "Tools ready.", "cls": "ok"})
+        STATE.emit({"type": "status", "text": "Tools ready"})
+        notify_macos("YTDownloader", "Tools installed")
+    else:
+        missing = [n for n in ("yt-dlp", "ffmpeg") if not resolve_tool(n)]
+        STATE.emit(
+            {
+                "type": "error",
+                "text": (
+                    f"Still missing: {', '.join(missing) or 'unknown'}. "
+                    "Install Homebrew from https://brew.sh (native, not Rosetta), "
+                    "then click Fix tools again."
+                ),
+            }
+        )
     STATE.busy = False
     STATE.emit({"type": "done"})
 
 
 def run_update_ytdlp() -> None:
     ensure_path()
-    brew_arm = Path("/opt/homebrew/bin/brew")
-    brew_intel = Path("/usr/local/bin/brew")
     yt = resolve_tool("yt-dlp")
     try:
-        if is_apple_silicon_hardware() and brew_arm.is_file():
-            cmd = ["arch", "-arm64", str(brew_arm), "upgrade", "yt-dlp"]
-            STATE.emit({"type": "log", "line": "Updating yt-dlp via Homebrew (ARM)…", "cls": "muted"})
-        elif brew_intel.is_file():
-            prefix = ["arch", "-x86_64"] if is_apple_silicon_hardware() else []
-            cmd = [*prefix, str(brew_intel), "upgrade", "yt-dlp"]
+        cmd = _brew_cmd("upgrade", "yt-dlp")
+        if cmd:
             STATE.emit({"type": "log", "line": "Updating yt-dlp via Homebrew…", "cls": "muted"})
-        elif yt:
-            cmd = [yt, "-U"]
+            code = _stream_cmd(cmd)
+            if code == 0:
+                STATE.emit({"type": "log", "line": "yt-dlp updated.", "cls": "ok"})
+                STATE.emit({"type": "status", "text": "yt-dlp up to date"})
+                notify_macos("YTDownloader", "yt-dlp updated")
+                return
+        if yt:
             STATE.emit({"type": "log", "line": "Updating yt-dlp…", "cls": "muted"})
-        else:
-            STATE.emit({"type": "error", "text": "yt-dlp not found — click Fix tools first"})
-            return
-        code = _stream_cmd(cmd)
-        if code == 0:
-            STATE.emit({"type": "log", "line": "yt-dlp updated.", "cls": "ok"})
+            if _stream_cmd([yt, "-U"]) == 0:
+                STATE.emit({"type": "log", "line": "yt-dlp updated.", "cls": "ok"})
+                STATE.emit({"type": "status", "text": "yt-dlp up to date"})
+                notify_macos("YTDownloader", "yt-dlp updated")
+                return
+        STATE.emit({"type": "log", "line": "Trying reinstall fallbacks…", "cls": "muted"})
+        if _try_pip_imageio() or _try_ytdlp_macos_binary() or _try_ytdlp_zipimport():
+            STATE.emit({"type": "log", "line": "yt-dlp refreshed.", "cls": "ok"})
             STATE.emit({"type": "status", "text": "yt-dlp up to date"})
             notify_macos("YTDownloader", "yt-dlp updated")
         else:
-            STATE.emit({"type": "log", "line": "Brew upgrade failed — trying pip/binary…", "cls": "muted"})
-            if _install_via_pip_imageio() or _install_via_ytdlp_binary():
-                STATE.emit({"type": "log", "line": "yt-dlp refreshed.", "cls": "ok"})
-                STATE.emit({"type": "status", "text": "yt-dlp up to date"})
-            else:
-                STATE.emit({"type": "error", "text": f"Update failed ({code})"})
+            STATE.emit({"type": "error", "text": "Could not update yt-dlp — click Fix tools"})
     except Exception as exc:  # noqa: BLE001
         STATE.emit({"type": "error", "text": str(exc)})
     finally:
