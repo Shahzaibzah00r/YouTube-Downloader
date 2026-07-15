@@ -21,7 +21,7 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.8.0"
+  VERSION="1.8.1"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
@@ -66,16 +66,25 @@ RES="$HERE/Resources"
 LOGDIR="$HOME/Library/Logs/YTDownloader"
 LOG="$LOGDIR/launch.log"
 VENV="$HOME/Library/Application Support/YTDownloader/venv"
-MARKER="$VENV/.ytd_deps_ok_v2"
+MARKER="$VENV/.ytd_deps_ok_v3"
 
 mkdir -p "$LOGDIR"
-echo "---- $(date) launch arch=$(uname -m) ----" >>"$LOG"
+echo "---- $(date) launch uname=$(uname -m) ----" >>"$LOG"
+
+# If this is Apple Silicon hardware but we're under Rosetta, re-exec native ARM.
+# (Rosetta makes uname -m = x86_64 and breaks /opt/homebrew brew installs.)
+if [[ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" == "1" ]]; then
+  if [[ "$(uname -m)" != "arm64" ]]; then
+    echo "Re-exec under arch -arm64 (was Rosetta)" >>"$LOG"
+    exec arch -arm64 /bin/bash "$0" "$@"
+  fi
+fi
 
 cd "$RES" || exit 1
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
-ARCH="$(uname -m)"
-if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
+# Prefer Homebrew Python matching the real chip
+if [[ "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" == "1" ]]; then
   CANDIDATES=(/opt/homebrew/bin/python3 /usr/bin/python3 /usr/local/bin/python3)
 else
   CANDIDATES=(/usr/local/bin/python3 /usr/bin/python3 /opt/homebrew/bin/python3)
@@ -91,9 +100,22 @@ if [[ -z "$PYTHON" ]]; then
   open -a TextEdit "$LOG" 2>/dev/null || true
   exit 1
 fi
-echo "python=$PYTHON" >>"$LOG"
+echo "python=$PYTHON arch=$(uname -m)" >>"$LOG"
 
+# Recreate venv if missing, or if it was built under Rosetta on Apple Silicon
+NEED_SETUP=0
 if [[ ! -x "$VENV/bin/python" || ! -f "$MARKER" ]]; then
+  NEED_SETUP=1
+fi
+if [[ -x "$VENV/bin/python" && "$(sysctl -n hw.optional.arm64 2>/dev/null || echo 0)" == "1" ]]; then
+  VENV_ARCH="$("$VENV/bin/python" -c 'import platform; print(platform.machine())' 2>/dev/null || true)"
+  if [[ "$VENV_ARCH" == "x86_64" || "$VENV_ARCH" == "i386" ]]; then
+    echo "Venv is Rosetta ($VENV_ARCH) — rebuilding native ARM" >>"$LOG"
+    NEED_SETUP=1
+  fi
+fi
+
+if [[ "$NEED_SETUP" -eq 1 ]]; then
   echo "Installing official pywebview macOS dependencies…" >>"$LOG"
   rm -rf "$VENV"
   mkdir -p "$(dirname "$VENV")"
@@ -118,7 +140,6 @@ if [[ ! -x "$VENV/bin/python" || ! -f "$MARKER" ]]; then
   printf 'ok\n' > "$MARKER"
 fi
 
-# Do not redirect stdio — Cocoa GUI apps can misbehave when stdout is a file.
 exec "$VENV/bin/python" "$RES/mac_entry.py"
 LAUNCH
 chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
