@@ -30,7 +30,7 @@ HISTORY_MAX = 20
 GITHUB_REPO = "Shahzaibzah00r/YouTube-Downloader"
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}"
 # Bump when cutting a release (also written into the .app by build_app.sh)
-APP_VERSION_FALLBACK = "1.7.6"
+APP_VERSION_FALLBACK = "1.7.7"
 PROGRESS_RE = re.compile(r"\[download\]\s+([0-9.]+)%")
 SPEED_RE = re.compile(
     r"at\s+([0-9.]+)\s*([KMGT]?i?B)/s",
@@ -2236,21 +2236,19 @@ def open_native_window(url: str) -> bool:
     except ImportError:
         return False
 
-    # Near full-screen desktop window
+    # Avoid tkinter here — creating a Tk root before Cocoa can hang and leave
+    # only a Dock icon with no window (especially on newer macOS / M-series).
+    width, height = 1280, 860
     try:
-        import tkinter as tk
+        from AppKit import NSScreen  # type: ignore
 
-        root = tk.Tk()
-        root.withdraw()
-        sw = root.winfo_screenwidth()
-        sh = root.winfo_screenheight()
-        root.destroy()
-        width = max(1100, int(sw * 0.92))
-        height = max(740, int(sh * 0.90))
+        frame = NSScreen.mainScreen().frame()
+        width = max(1100, int(frame.size.width * 0.92))
+        height = max(740, int(frame.size.height * 0.90))
     except Exception:
-        width, height = 1280, 860
+        pass
 
-    webview.create_window(
+    window_kwargs = dict(
         title="YTDownloader",
         url=url,
         width=width,
@@ -2259,16 +2257,20 @@ def open_native_window(url: str) -> bool:
         maximized=True,
         background_color="#0b0d10",
     )
+    try:
+        webview.create_window(**window_kwargs, focus=True)
+    except TypeError:
+        webview.create_window(**window_kwargs)
     webview.start(gui="cocoa")
     return True
 
 
 def main() -> None:
     ensure_path()
-    # Soften Gatekeeper friction for unsigned OSS builds (no paid Apple cert)
+    # Quarantine only on launch — full ad-hoc codesign is slow and delays the window
     bundle = detect_app_bundle()
     if bundle:
-        prepare_app_for_open(bundle)
+        clear_quarantine(bundle)
     httpd, url = start_server()
     print(f"YTDownloader backend: {url} · v{app_version()}")
 

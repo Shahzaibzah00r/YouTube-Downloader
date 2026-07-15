@@ -21,7 +21,7 @@ elif git -C "$ROOT" describe --tags --exact-match 2>/dev/null | grep -q .; then
 elif git -C "$ROOT" describe --tags --always 2>/dev/null | grep -q .; then
   VERSION="$(git -C "$ROOT" describe --tags --always)"
 else
-  VERSION="1.7.6"
+  VERSION="1.7.7"
 fi
 VERSION_TAG="$VERSION"
 VERSION="${VERSION#v}"
@@ -55,6 +55,8 @@ printf '%s\n' "$VERSION" > "$ROOT/VERSION"
 
 cat > "$APP/Contents/MacOS/$EXEC_NAME" <<'LAUNCH'
 #!/bin/bash
+# Fast launcher: never use osascript notifications (macOS shows those as "Script Editor").
+# Never block on brew/codesign — open the UI as soon as possible.
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 APP_BUNDLE="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -62,17 +64,16 @@ RES="$HERE/Resources"
 LOGDIR="$HOME/Library/Logs/YTDownloader"
 LOG="$LOGDIR/launch.log"
 mkdir -p "$LOGDIR"
+{
+  echo "---- $(date) launch $(uname -m) ----"
+} >>"$LOG"
+
 cd "$RES"
 
-exec >>"$LOG" 2>&1
-echo "---- $(date) launch $(uname -m) ----"
-
-# Clear Gatekeeper quarantine on every launch (unsigned OSS — no paid Apple cert)
-xattr -cr "$APP_BUNDLE" 2>/dev/null || true
-codesign --force --deep --sign - "$APP_BUNDLE" 2>/dev/null || true
+# Quarantine only (skip codesign every launch — it is slow and can leave Dock icon with no window)
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
-# Prefer Homebrew Python on Apple Silicon (arm64) over /usr/local (often Rosetta)
+# Prefer Homebrew Python on Apple Silicon; on Intel prefer /usr/local then system
 PYTHON=""
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "arm64" || "$ARCH" == "aarch64" ]]; then
@@ -85,35 +86,29 @@ for candidate in "${CANDIDATES[@]}"; do
 done
 
 if [[ -z "$PYTHON" ]]; then
-  osascript -e 'display dialog "Python 3 is required.\n\nInstall from python.org or: brew install python" buttons {"OK"} default button 1 with title "YTDownloader"'
+  osascript -e 'display dialog "Python 3 is required.\n\nInstall from python.org or run:\n  brew install python" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
+  echo "ERROR: no python3" >>"$LOG"
   exit 1
 fi
-echo "python=$PYTHON"
+echo "python=$PYTHON" >>"$LOG"
 
-# App-local venv for pywebview (native Mac window, not browser)
 VENV="$HOME/Library/Application Support/YTDownloader/venv"
 if [[ ! -x "$VENV/bin/python" ]]; then
-  osascript -e 'display notification "Setting up YTDownloader (first launch)…" with title "YTDownloader"'
   mkdir -p "$(dirname "$VENV")"
-  if ! "$PYTHON" -m venv "$VENV"; then
-    osascript -e 'display dialog "Could not create the app environment.\n\nTry: brew install python\nThen reopen YTDownloader." buttons {"OK"} default button 1 with title "YTDownloader"'
+  if ! "$PYTHON" -m venv "$VENV" >>"$LOG" 2>&1; then
+    osascript -e 'display dialog "Could not create the app environment.\n\nTry:\n  brew install python\nThen reopen YTDownloader.\n\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
     exit 1
   fi
-  "$VENV/bin/pip" install -U pip || true
-  if ! "$VENV/bin/pip" install pywebview; then
-    osascript -e 'display dialog "Could not install pywebview (needed for the Mac window).\n\nCheck your internet connection and reopen the app.\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"'
+  "$VENV/bin/pip" install -U pip >>"$LOG" 2>&1 || true
+  if ! "$VENV/bin/pip" install pywebview >>"$LOG" 2>&1; then
+    osascript -e 'display dialog "Could not install pywebview (needed for the window).\n\nCheck internet, then reopen.\nLog: ~/Library/Logs/YTDownloader/launch.log" buttons {"OK"} default button 1 with title "YTDownloader"' >/dev/null 2>&1 || true
     rm -rf "$VENV"
     exit 1
   fi
 fi
 
-# Do NOT block the window on brew install — that made first launch look "broken"
-# (brew can take minutes). Open the app; user can click Fix tools inside.
-if ! command -v yt-dlp >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
-  osascript -e 'display notification "Open the app → click Fix tools to install yt-dlp & ffmpeg" with title "YTDownloader"' || true
-fi
-
-exec "$VENV/bin/python" yt_downloader.py
+# Tools (yt-dlp/ffmpeg) are installed from inside the app via Fix tools — never here.
+exec "$VENV/bin/python" yt_downloader.py >>"$LOG" 2>&1
 LAUNCH
 chmod +x "$APP/Contents/MacOS/$EXEC_NAME"
 
